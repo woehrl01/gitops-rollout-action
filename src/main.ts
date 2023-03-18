@@ -8,47 +8,67 @@ import { assign, createMachine, interpret } from 'xstate'
 
 const machine = createMachine<{
   issueNumber: number
+  persist: boolean
   currentState: string
   number_of_rings: number
-  current_ring: number
+  current_ring: number,
+  last_ring_deployment_timestamp: number
 }>({
-  /** @xstate-layout N4IgpgJg5mDOIC5SwC4EMVgLJoMYAsBLAOzADoTCVC0AbAYgEEBhAFQEkA1R1gUQG0ADAF1EoAA4B7WFUKTiYkAA9EARgDMAVjKrBATgAsggwHYDmvepOaATABoQATzV7BZdQDY9Jk3oAcHqaCFgC+IQ6oGNh4RKRkpADuAPoATiRQSRBg4rSSjgC2YMQo9JEpKEKiSCBSMtTyiioImh5+ZDaC6oJ+gp0eqqqGDs4Ig26e3r4BQaHhIJGYOAQk5KRKKKnp9NS4ANaVirWyDdVNHoE6vh62Jn5+NgN+w4h+qmQGep8mDwaqmgH+MIRdCLGIreJgdabYhQbaEPb8VRVCTSY4KU4vAJkQQmTr-TQWGwtZ6jVQ2Mh6TTqXSCGy3AyBP5A+Yg6LLOJrDZpGH0NAAI0k5UgB2qR3q6NATTuHmxuK0fgJeiJHhJDz0ZDljxs-haxhMYTmxEkWXg1QWbNiYEOqPFjUQAFoVU4HR5mealpaKMRZHRrXU5BLlIgDPZnaNXGQAT5-IFcbNgVEPeDEtCMlkcnlCsU-Wi7Qg6W8TNdAg9VEX1H49CTVB4TO4vLcWhXqQY-G7WUmOZCuekc7aMQhztoFZZbgqi-8TNX7u8qWS-mruj524mwXF07lHElUJJxOJIH2A3ndBGlXpWjZ+rX-k8w4MZZqbEZvjXRyvQezyLhJPkcmBMIeJySmo+huGeF5XtYdwkncGqdLo6iIVoRiaKoBohEAA */
   id: 'stateMachine',
   initial: "initial",
   context: {
     issueNumber: 0,
+    persist: false,
     currentState: '',
     number_of_rings: 4,
-    current_ring: 0
+    current_ring: 0,
+    last_ring_deployment_timestamp: 0
   },
   states: {
     initial: {
       on: {
-        ACTIVATE: "#stateMachine.new_ring_deployment"
+        activate: [{
+          target: "#stateMachine.new_ring_deployment",
+          cond: "is_matching"
+        }, "skip"]
       }
     },
 
     new_ring_deployment: {
       entry: "start_new_ring_deployment",
       on: {
-        start: "next_ring"
+        start: "next_ring",
+
+        create_issue: {
+          target: "new_ring_deployment",
+          internal: true
+        }
       }
     },
 
     next_ring: {
       entry: "start_next_ring",
       on: {
-        tick: [{
-          actions: assign({
-            current_ring: (context) => context.current_ring + 1
-          }),
+        tick: [
+          {
+            actions: assign({
+              current_ring: (context) => {
+                if (Date.now() - context.last_ring_deployment_timestamp > 1000 * 60 * 5) {
+                  return context.current_ring + 1
+                }
+                return context.current_ring
+              }
+            }),
 
-          target: "next_ring",
-          internal: true,
-          cond: "has_next_ring"
-        }, "complete"],
+            target: "next_ring",
+            internal: true,
+            cond: "has_next_ring"
+          },
+          "complete"
+        ],
 
-        aborted: "deploy_stopped"
+        fast_lane: "complete",
+        abort: "deploy_stopped"
       }
     },
 
@@ -58,6 +78,10 @@ const machine = createMachine<{
 
     complete: {
       entry: "complete_deployment",
+      type: "final"
+    },
+
+    skip: {
       type: "final"
     }
   }
@@ -120,40 +144,73 @@ async function findIssueWithLabel(
   return issues.length > 0 ? issues[0] : null;
 }
 
+async function findOrCreateIssueWithLabel(
+  octokit: ReturnType<typeof github.getOctokit>,
+  owner: string,
+  repo: string,
+  label: string
+): Promise<any> {
+  const issue = await findIssueWithLabel(octokit, owner, repo, label);
+
+  if (issue) {
+    return issue;
+  }
+
+  console.log(`No open issue found with the label "${label}". Creating a new one...`);
+
+  const { data: newIssue } = await octokit.rest.issues.create({
+    owner,
+    repo,
+    title: 'State Machine Issue',
+    body: `<!-- STATE: ${JSON.stringify({})} -->`,
+    labels: [label],
+  });
+
+  return newIssue;
+}
+
 async function handlePush(): Promise<void> {
-  return handle((service, state) => service.send({ type: 'INIT', ...state }));
+  return handle(service => service.send('initial'));
 }
 
 async function handleSchedule(): Promise<void> {
-  return handle((service, state) => service.send({ type: 'TICK', ...state }));
+  return handle(service => service.send('tick'));
 }
 
 async function handleWorkitemLabel(): Promise<void> {
   // Your previous code for handling workitem Label actions
 }
 
-async function handle(action: (service: any, state: any) => {}): Promise<void> {
+async function handle(action: (service: any) => {}): Promise<void> {
   const token = core.getInput('repo-token', { required: true });
   const octokit = github.getOctokit(token);
 
   const issue = await findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, 'abc');
+  let persistetState = null;
   if (!issue) {
     console.log('No open issue found with the label "abc"');
-    return;
+    persistetState = {
+      currentState: 'inactive',
+      counter: 0,
+    };
+  } else {
+    persistetState = getStateFromBody(issue.body);
   }
 
-  const state = getStateFromBody(issue.body);
-  const service = interpret(machine).start(state.currentState);
+  const service = interpret(machine)
+    .onTransition((state) => {
+      console.log(`State changed to ${state.value}`);
+    })
+    .start(persistetState.currentState);
 
-  action(service, state);
+  action(service);
 
-  await updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, {
-    currentState: service.getSnapshot(),
-    counter: service.getSnapshot().context.current_ring,
-  });
+  service.stop();
+
+  const newState = service.getSnapshot()
+
+  await updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState);
 }
-
-
 
 // Helper function to extract state from issue body
 function getStateFromBody(body: string): any {
@@ -167,12 +224,12 @@ async function updateStateInBody(
   owner: string,
   repo: string,
   issueNumber: number,
-  state: any
+  newState: any
 ): Promise<void> {
-  const currentState = getStateFromBody(state.body);
-  const newState = { ...currentState, ...state };
 
-  const newBody = state.body.replace(
+  const issue = await findOrCreateIssueWithLabel(octokit, owner, repo, 'abc')
+
+  const newBody = issue.body.replace(
     /<!-- STATE: (.*?) -->/,
     `<!-- STATE: ${JSON.stringify(newState)} -->`
   );
@@ -182,6 +239,7 @@ async function updateStateInBody(
     repo,
     issue_number: issueNumber,
     body: newBody,
+    labels: ['abc', `ring:${newState.current_ring}/${newState.number_of_rings}`],
   });
 }
 
