@@ -122,12 +122,15 @@ function handlePush() {
         const buffer = (0, child_process_1.execSync)(`git diff --name-only ${parentCommit} ${currentCommit}`);
         // convert buffer to string
         const changedFiles = buffer.toString().split('\n');
+        console.log(`Changed files: ${changedFiles.join(', ')}`);
         //get all parts that have changed files
         const changedParts = config.parts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
+        console.log(`Changed parts: ${changedParts.map(part => part.name)}`);
         //get all issues that have a label of a changed part
         const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
             return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
+        console.log(`Issues found: ${issues.map(issue => issue.title)}`);
         //find all parts without an open issue
         const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => issue.labels.some((label) => label.name === part.name)));
         for (const part of partsWithoutIssue) {

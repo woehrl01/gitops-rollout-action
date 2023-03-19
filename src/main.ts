@@ -111,12 +111,14 @@ async function handlePush(): Promise<void> {
   // convert buffer to string
   const changedFiles = buffer.toString().split('\n')
 
-
+  console.log(`Changed files: ${changedFiles.join(', ')}`)
 
   //get all parts that have changed files
   const changedParts = config.parts.filter(part =>
     changedFiles.some((file: string) => minimatch(file, part.filePattern))
   )
+
+  console.log(`Changed parts: ${changedParts.map(part => part.name)}`)
 
   //get all issues that have a label of a changed part
   const issues = await Promise.all(
@@ -129,6 +131,8 @@ async function handlePush(): Promise<void> {
       )
     )
   )
+
+  console.log(`Issues found: ${issues.map(issue => issue.title)}`)
 
   //find all parts without an open issue
   const partsWithoutIssue = config.parts.filter(
