@@ -8,7 +8,7 @@ import * as path from 'path'
 import glob from 'glob'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { minimatch } from 'minimatch'
-
+import dedent from 'dedent-js'
 
 async function run(): Promise<void> {
   try {
@@ -142,7 +142,7 @@ async function handlePush(): Promise<void> {
     const files = await copyInitialFiles(part)
     hasChanged = true
 
-    const readableBodyText = `
+    const readableBodyText = dedent(`
     This issue is used to track the rollout of the part ${part.name}.
 
     The rollout is split into ${part.waitDurations.length} rings.
@@ -167,7 +167,7 @@ async function handlePush(): Promise<void> {
 
     ${files.map(file => `- \`${file}\``).join('\n')}
     
-    `
+    `)
 
     const issue = await octokit.rest.issues.create({
       owner: github.context.repo.owner,
