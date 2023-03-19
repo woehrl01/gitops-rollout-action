@@ -151,6 +151,10 @@ async function copyInitialFiles(part: Part): Promise<void> {
   const files = await getFiles(part.filePattern)
 
   for (const file of files) {
+    if (fs.lstatSync(file).isDirectory()) {
+      continue
+    }
+
     const targetFile = path.join(target, path.basename(file))
 
     core.info(`Copying ${file} to ${targetFile}`)

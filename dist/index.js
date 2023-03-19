@@ -144,6 +144,9 @@ function copyInitialFiles(part) {
         //copy all files from part.filePattern to part.target
         const files = yield getFiles(part.filePattern);
         for (const file of files) {
+            if (fs.lstatSync(file).isDirectory()) {
+                continue;
+            }
             const targetFile = path.join(target, path.basename(file));
             core.info(`Copying ${file} to ${targetFile}`);
             fs.mkdirSync(path.dirname(targetFile), { recursive: true });
