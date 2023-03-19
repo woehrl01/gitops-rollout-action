@@ -133,8 +133,7 @@ function handlePush() {
                     state_reason: 'not_planned'
                 });
             }
-            core.info(`Initalize part ${part.name}`);
-            //create a new issue for the part
+            core.info(`Initialize part ${part.name}`);
             const initalState = {
                 last_rollout_timestamp: Date.now(),
                 waitDurations: part.waitDurations,
@@ -143,7 +142,7 @@ function handlePush() {
             const files = yield copyInitialFiles(part);
             hasChanged = true;
             const readableBodyText = (0, dedent_js_1.default)(`
-    This issue is dedicated to tracking the rollout of ${part.name}.
+    This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
 
     The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 

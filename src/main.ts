@@ -131,8 +131,8 @@ async function handlePush(): Promise<void> {
 
     }
 
-    core.info(`Initalize part ${part.name}`)
-    //create a new issue for the part
+    core.info(`Initialize part ${part.name}`)
+
     const initalState = {
       last_rollout_timestamp: Date.now(),
       waitDurations: part.waitDurations,
@@ -143,7 +143,7 @@ async function handlePush(): Promise<void> {
     hasChanged = true
 
     const readableBodyText = dedent(`
-    This issue is dedicated to tracking the rollout of ${part.name}.
+    This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
 
     The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 
