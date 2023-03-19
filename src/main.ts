@@ -15,8 +15,8 @@ async function run(): Promise<void> {
     const context = github.context
     const eventType = context.eventName
 
-    if (eventType === 'schedule') {
-      await handleSchedule()
+    if (eventType === 'schedule' || eventType === 'workflow_dispatch') {
+      await handleTick()
     } else if (eventType === 'push') {
       await handlePush()
     } else {
@@ -206,7 +206,7 @@ async function commitAndPush(): Promise<void> {
   core.info(`Committed and pushed changes`)
 }
 
-async function handleSchedule(): Promise<void> {
+async function handleTick(): Promise<void> {
   // Find all open issues of parts
   const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)

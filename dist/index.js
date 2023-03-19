@@ -57,8 +57,8 @@ function run() {
         try {
             const context = github.context;
             const eventType = context.eventName;
-            if (eventType === 'schedule') {
-                yield handleSchedule();
+            if (eventType === 'schedule' || eventType === 'workflow_dispatch') {
+                yield handleTick();
             }
             else if (eventType === 'push') {
                 yield handlePush();
@@ -198,7 +198,7 @@ function commitAndPush() {
         core.info(`Committed and pushed changes`);
     });
 }
-function handleSchedule() {
+function handleTick() {
     return __awaiter(this, void 0, void 0, function* () {
         // Find all open issues of parts
         const token = core.getInput('repo-token', { required: true });
