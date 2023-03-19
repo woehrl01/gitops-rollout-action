@@ -5,10 +5,13 @@ on: # rebuild any PRs and main branch changes
     branches:
       - main
       - 'releases/*'
+  schedule:
+    - cron: '*/5 * * * *'
 
 jobs:
   build: # make sure build/ci work properly
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v2
       - run: |
@@ -19,6 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: ./
+      - uses: ./ # uses an action in the root directory
         with:
-          milliseconds: 1000
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # if you want to test with a different config
+          # config: .github/labeler.yml
+          # if you want to test with a different repo
+          # repo-token: ${{ secrets.REPO_TOKEN }}
+          # if you want to test with a different event
+          # event: pull_request
