@@ -180,7 +180,7 @@ function handlePush() {
                     owner: github.context.repo.owner,
                     repo: github.context.repo.repo,
                     issue_number: partWithIssue.issue.number,
-                    body: `This rollout has been recreated as ${issue.data.number}`
+                    body: `This rollout has been recreated as #${issue.data.number}`
                 });
             }
         }
