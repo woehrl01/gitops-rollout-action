@@ -102,8 +102,11 @@ async function handlePush(): Promise<void> {
   const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)
 
+  const currentCommit = github.context.sha
+  const parentCommit = github.context.payload.before
+
   // run shell command to get changed files
-  const buffer = execSync('git diff --name-only HEAD~1 HEAD')
+  const buffer = execSync(`git diff --name-only ${parentCommit} ${currentCommit}`)
 
   // convert buffer to string
   const changedFiles = buffer.toString().split('\n')
