@@ -351,10 +351,15 @@ async function updateStateInBody(
     throw new Error(`Could not find issue ${issueNumber}`)
   }
 
-  const newBody = (issue.body || '').replace(
-    /<!-- STATE: (.*?) -->/,
-    `<!-- STATE: ${JSON.stringify(newState)} -->`
-  )
+  let newBody = ''
+  if (!issue.body) {
+    newBody = `<!-- STATE: ${JSON.stringify(newState)} -->`
+  } else {
+    newBody = issue.body.replace(
+      /<!-- STATE: (.*?) -->/,
+      `<!-- STATE: ${JSON.stringify(newState)} -->`
+    )
+  }
 
   const keepLabels = currentLabels.filter(
     label => !label.name.startsWith('ring:')

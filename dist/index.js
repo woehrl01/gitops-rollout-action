@@ -84,23 +84,6 @@ function findIssueWithLabel(octokit, owner, repo, label) {
         return issues.length > 0 ? issues[0] : null;
     });
 }
-function findOrCreateIssueWithLabel(octokit, owner, repo, label) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const issue = yield findIssueWithLabel(octokit, owner, repo, label);
-        if (issue) {
-            return issue;
-        }
-        core.info(`No open issue found with the label "${label}". Creating a new one...`);
-        const { data: newIssue } = yield octokit.rest.issues.create({
-            owner,
-            repo,
-            title: 'State Machine Issue',
-            body: `<!-- STATE: ${JSON.stringify({})} -->`,
-            labels: [label]
-        });
-        return newIssue;
-    });
-}
 const config = {
     parts: [
         {
@@ -131,7 +114,7 @@ function handlePush() {
         }
         //get all issues that have a label of a changed part
         const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
-            return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+            return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
         core.info(`Issues found: ${issues.map(issue => issue.title)}`);
         //find all parts without an open issue
@@ -185,7 +168,7 @@ function handleSchedule() {
         const token = core.getInput('repo-token', { required: true });
         const octokit = github.getOctokit(token);
         const issues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () {
-            return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+            return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
         // Iterate over all issues
         for (const issue of issues) {
@@ -298,8 +281,21 @@ function getStateFromBody(body) {
 // Helper function to update state in issue body
 function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentLabels) {
     return __awaiter(this, void 0, void 0, function* () {
-        const issue = yield findOrCreateIssueWithLabel(octokit, owner, repo, 'abc');
-        const newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`);
+        const { data: issue } = yield octokit.rest.issues.get({
+            owner,
+            repo,
+            issue_number: issueNumber
+        });
+        if (!issue) {
+            throw new Error(`Could not find issue ${issueNumber}`);
+        }
+        let newBody = '';
+        if (!issue.body) {
+            newBody = `<!-- STATE: ${JSON.stringify(newState)} -->`;
+        }
+        else {
+            newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`);
+        }
         const keepLabels = currentLabels.filter(label => !label.name.startsWith('ring:'));
         yield octokit.rest.issues.update({
             owner,
