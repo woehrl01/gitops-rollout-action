@@ -1,5 +1,4 @@
 /* eslint-disable import/named */
-/* eslint-disable import/no-named-as-default */
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as core from '@actions/core'
@@ -7,8 +6,9 @@ import * as fs from 'fs'
 import * as github from '@actions/github'
 import * as path from 'path'
 import glob from 'glob'
+import { simpleGit, SimpleGit } from 'simple-git'
 import { minimatch } from 'minimatch'
-import simpleGit, { SimpleGit } from 'simple-git'
+
 
 async function run(): Promise<void> {
   try {
@@ -190,7 +190,18 @@ async function commitAndPush(): Promise<void> {
 
   await git.commit('Update parts')
 
-  await git.push()
+  for (const retry of [1, 2, 3]) {
+    try {
+      await git.push()
+      break
+    } catch (error) {
+      if (retry === 3) {
+        throw error
+      }
+      core.info(`Push failed. execute rebase pull and retry...`)
+      await git.pull({ '--rebase': 'true' })
+    }
+  }
 
   core.info(`Committed and pushed changes`)
 }

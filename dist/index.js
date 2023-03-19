@@ -43,7 +43,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 /* eslint-disable import/named */
-/* eslint-disable import/no-named-as-default */
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const core = __importStar(__nccwpck_require__(2186));
@@ -51,8 +50,8 @@ const fs = __importStar(__nccwpck_require__(7147));
 const github = __importStar(__nccwpck_require__(5438));
 const path = __importStar(__nccwpck_require__(1017));
 const glob_1 = __importDefault(__nccwpck_require__(1957));
+const simple_git_1 = __nccwpck_require__(9103);
 const minimatch_1 = __nccwpck_require__(2002);
-const simple_git_1 = __importDefault(__nccwpck_require__(9103));
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -96,7 +95,7 @@ const config = {
         }
     ]
 };
-const git = (0, simple_git_1.default)();
+const git = (0, simple_git_1.simpleGit)();
 function handlePush() {
     return __awaiter(this, void 0, void 0, function* () {
         const token = core.getInput('repo-token', { required: true });
@@ -183,7 +182,19 @@ function commitAndPush() {
         yield git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
         yield git.add('.');
         yield git.commit('Update parts');
-        yield git.push();
+        for (const retry of [1, 2, 3]) {
+            try {
+                yield git.push();
+                break;
+            }
+            catch (error) {
+                if (retry === 3) {
+                    throw error;
+                }
+                core.info(`Push failed. execute rebase pull and retry...`);
+                yield git.pull({ '--rebase': 'true' });
+            }
+        }
         core.info(`Committed and pushed changes`);
     });
 }
