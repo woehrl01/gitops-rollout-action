@@ -143,27 +143,21 @@ async function handlePush(): Promise<void> {
     hasChanged = true
 
     const readableBodyText = dedent(`
-    This issue is used to track the rollout of the part ${part.name}.
+    This issue is dedicated to tracking the rollout of ${part.name}.
 
-    The rollout is split into ${part.waitDurations.length} rings.
-
-    The rollout is executed in the following timeframes:
+    The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 
     ${part.waitDurations.map((duration, index) => `- Ring ${index + 1}: ${duration}`).join('\n')}
 
-    The rollout is finished when all rings are active.
+    The rollout is considered complete when all rings are active. Progress is monitored using issue labels, which include:
 
-    The current state of the rollout is tracked via the labels of the issues.
-
-    You can use the following labels to control the rollout:
-
-    - \`abort\`: Abort the rollout
-    - \`pause\`: Pause the rollout
-    - \`fasttrack\`: Fasttrack the rollout to the next ring, on the next tick
+    - \`abort\`: Aborts the rollout
+    - \`pause\`: Pauses the rollout
+    - \`fasttrack\`: Advances the rollout to the next ring on the next tick
 
     ---
 
-    The following files are affected by this rollout:
+    The files impacted by this rollout are:
 
     ${files.map(file => `- \`${file}\``).join('\n')}
     
@@ -216,7 +210,7 @@ async function copyInitialFiles(part: Part): Promise<string[]> {
 
     fs.copyFileSync(file, targetFile)
 
-    copiedFiles.push(file)
+    copiedFiles.push(targetFile)
   }
 
   return copiedFiles
