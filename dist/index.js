@@ -287,7 +287,7 @@ function handleTick(inputConfig) {
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
-                        body: `Rollout aborted`
+                        body: `Rollout aborted: ${newState.abortReason}`
                     });
                 }
                 else {
@@ -354,7 +354,7 @@ function getNextState(currentState, part, flags) {
         if (currentState.current_ring < currentState.waitDurations.length) {
             if (flags.isAborted) {
                 core.info('Rollout is aborted. Skipping...');
-                return Object.assign(Object.assign({}, currentState), { abort: true });
+                return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: 'Aborted by user' });
             }
             if (flags.isPaused) {
                 core.info('Rollout is paused. Skipping...');
@@ -386,7 +386,7 @@ function increaseRing(currentState, part) {
         const commitSha = fs.readFileSync(`${currentRingLocation}/.commit`, 'utf8');
         if (commitSha !== currentState.sourceSha) {
             core.warning(`Source commit ${currentState.sourceSha} does not match current ring commit ${commitSha}. Abort...`);
-            return Object.assign(Object.assign({}, currentState), { abort: true });
+            return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: `Source commit ${currentState.sourceSha} does not match current ring commit ${commitSha}. There must be another rollout for this part in the fastlane.` });
         }
         // Copy files from current ring to next ring
         yield copyFolder(currentRingLocation, nextRingLocation);
