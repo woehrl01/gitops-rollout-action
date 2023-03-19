@@ -110,10 +110,12 @@ async function handlePush(): Promise<void> {
     )
   )
 
+  const validIssues = issues.filter(issue => issue !== null)
+
   //find all parts without an open issue
   const partsWithoutIssue = config.parts.filter(
     part =>
-      !issues.some(issue =>
+      !validIssues.some(issue =>
         (issue.labels || []).some((label: { name: string }) => label.name === `part:${part.name}`)
       )
   )
@@ -176,34 +178,32 @@ async function handleSchedule(): Promise<void> {
   const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)
 
-  const issues = await Promise.all(
-    config.parts.map(async part =>
-      findIssueWithLabel(
-        octokit,
-        github.context.repo.owner,
-        github.context.repo.repo,
-        part.name
-      )
-    )
+  const partsWithIssues = await Promise.all(
+    config.parts.map(async part => {
+      return {
+        part,
+        issue: await findIssueWithLabel(
+          octokit,
+          github.context.repo.owner,
+          github.context.repo.repo,
+          part.name
+        )
+      }
+    })
   )
 
   // Iterate over all issues
-  for (const issue of issues) {
-    if (!issue) {
+  for (const partWithIssue of partsWithIssues) {
+    if (!partWithIssue.issue) {
+      core.info(`No issue found for part ${partWithIssue.part.name}`)
       continue
     }
 
+    const issue = partWithIssue.issue
+    const part = partWithIssue.part
+
     // Get the state from the issue body
     const state = getStateFromBody(issue.body)
-
-    // Get the part for the issue
-    const part = config.parts.find(p =>
-      (issue.labels || []).some((label: { name: string }) => label.name === `part:${p.name}`)
-    )
-
-    if (!part) {
-      throw new Error(`Could not find part for issue ${issue.number}`)
-    }
 
     const flags = getFlagsFromLabels(issue.labels)
 

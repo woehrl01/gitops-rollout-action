@@ -116,8 +116,9 @@ function handlePush() {
         const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
             return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
+        const validIssues = issues.filter(issue => issue !== null);
         //find all parts without an open issue
-        const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => (issue.labels || []).some((label) => label.name === `part:${part.name}`)));
+        const partsWithoutIssue = config.parts.filter(part => !validIssues.some(issue => (issue.labels || []).some((label) => label.name === `part:${part.name}`)));
         for (const part of partsWithoutIssue) {
             core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
@@ -169,21 +170,22 @@ function handleSchedule() {
         // Find all open issues of parts
         const token = core.getInput('repo-token', { required: true });
         const octokit = github.getOctokit(token);
-        const issues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () {
-            return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+        const partsWithIssues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () {
+            return {
+                part,
+                issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name)
+            };
         })));
         // Iterate over all issues
-        for (const issue of issues) {
-            if (!issue) {
+        for (const partWithIssue of partsWithIssues) {
+            if (!partWithIssue.issue) {
+                core.info(`No issue found for part ${partWithIssue.part.name}`);
                 continue;
             }
+            const issue = partWithIssue.issue;
+            const part = partWithIssue.part;
             // Get the state from the issue body
             const state = getStateFromBody(issue.body);
-            // Get the part for the issue
-            const part = config.parts.find(p => (issue.labels || []).some((label) => label.name === `part:${p.name}`));
-            if (!part) {
-                throw new Error(`Could not find part for issue ${issue.number}`);
-            }
             const flags = getFlagsFromLabels(issue.labels);
             // Get the next state
             const newState = yield getNextState(state, part, flags);
