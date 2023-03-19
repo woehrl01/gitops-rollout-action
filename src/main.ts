@@ -120,6 +120,11 @@ async function handlePush(): Promise<void> {
 
   console.log(`Changed parts: ${changedParts.map(part => part.name)}`)
 
+  if (changedParts.length === 0) {
+    console.log('No changed parts found. Nothing to do.')
+    return
+  }
+
   //get all issues that have a label of a changed part
   const issues = await Promise.all(
     changedParts.map(async part =>
