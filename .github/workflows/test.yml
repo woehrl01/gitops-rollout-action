@@ -25,9 +25,3 @@ jobs:
       - uses: ./ # uses an action in the root directory
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # if you want to test with a different config
-          # config: .github/labeler.yml
-          # if you want to test with a different repo
-          # repo-token: ${{ secrets.REPO_TOKEN }}
-          # if you want to test with a different event
-          # event: pull_request
