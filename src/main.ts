@@ -267,6 +267,8 @@ async function handleTick(): Promise<void> {
       })
     }
   }
+
+  await commitAndPush()
 }
 
 interface FlagsFromLabels {
