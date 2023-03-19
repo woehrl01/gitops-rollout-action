@@ -113,12 +113,14 @@ function handlePush() {
             return;
         }
         //get all issues that have a label of a changed part
-        const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
-            return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+        const partsWithIssue = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
+            return {
+                part,
+                issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, `part:${part.name}`)
+            };
         })));
-        const validIssues = issues.filter(issue => issue !== null);
         //find all parts without an open issue
-        const partsWithoutIssue = config.parts.filter(part => !validIssues.some(issue => (issue.labels || []).some((label) => label.name === `part:${part.name}`)));
+        const partsWithoutIssue = partsWithIssue.filter(partWithIssue => partWithIssue.issue === null).map(partWithIssue => partWithIssue.part);
         for (const part of partsWithoutIssue) {
             core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
@@ -177,7 +179,7 @@ function handleSchedule() {
         const partsWithIssues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () {
             return {
                 part,
-                issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name)
+                issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, `part:${part.name}`)
             };
         })));
         // Iterate over all issues
@@ -245,6 +247,7 @@ function getNextState(currentState, part, flags) {
                 core.info(`Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`);
                 return currentState;
             }
+            core.info(`Wait duration of ${waitDuration} has passed. increase ring...`);
             return increaseRing(currentState, part);
         }
         return currentState;
@@ -264,10 +267,11 @@ function increaseRing(currentState, part) {
 }
 function copyFolder(src, dest) {
     return __awaiter(this, void 0, void 0, function* () {
-        // Create the destination directory if it doesn't exist
-        if (!fs.existsSync(dest)) {
-            fs.mkdirSync(dest, { recursive: true });
+        // clear destination folder
+        if (fs.existsSync(dest)) {
+            fs.rmdirSync(dest, { recursive: true });
         }
+        fs.mkdirSync(dest, { recursive: true });
         // Read the source directory
         const entries = fs.readdirSync(src, { withFileTypes: true });
         // Iterate through the entries and handle files and directories separately

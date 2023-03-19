@@ -99,26 +99,23 @@ async function handlePush(): Promise<void> {
   }
 
   //get all issues that have a label of a changed part
-  const issues = await Promise.all(
-    changedParts.map(async part =>
-      findIssueWithLabel(
-        octokit,
-        github.context.repo.owner,
-        github.context.repo.repo,
-        part.name
-      )
+  const partsWithIssue = await Promise.all(
+    changedParts.map(async part => {
+      return {
+        part,
+        issue: await findIssueWithLabel(
+          octokit,
+          github.context.repo.owner,
+          github.context.repo.repo,
+          `part:${part.name}`
+        )
+      }
+    }
     )
   )
 
-  const validIssues = issues.filter(issue => issue !== null)
-
   //find all parts without an open issue
-  const partsWithoutIssue = config.parts.filter(
-    part =>
-      !validIssues.some(issue =>
-        (issue.labels || []).some((label: { name: string }) => label.name === `part:${part.name}`)
-      )
-  )
+  const partsWithoutIssue = partsWithIssue.filter(partWithIssue => partWithIssue.issue === null).map(partWithIssue => partWithIssue.part)
 
 
   for (const part of partsWithoutIssue) {
@@ -191,7 +188,7 @@ async function handleSchedule(): Promise<void> {
           octokit,
           github.context.repo.owner,
           github.context.repo.repo,
-          part.name
+          `part:${part.name}`
         )
       }
     })
@@ -294,6 +291,8 @@ async function getNextState(
       return currentState
     }
 
+    core.info(`Wait duration of ${waitDuration} has passed. increase ring...`)
+
     return increaseRing(currentState, part)
   }
 
@@ -317,10 +316,13 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
 }
 
 async function copyFolder(src: string, dest: string): Promise<void> {
-  // Create the destination directory if it doesn't exist
-  if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, { recursive: true })
+
+  // clear destination folder
+  if (fs.existsSync(dest)) {
+    fs.rmdirSync(dest, { recursive: true })
   }
+
+  fs.mkdirSync(dest, { recursive: true })
 
   // Read the source directory
   const entries = fs.readdirSync(src, { withFileTypes: true })
