@@ -134,12 +134,7 @@ function handlePush() {
                 });
             }
             core.info(`Initialize part ${part.name}`);
-            const initalState = {
-                last_rollout_timestamp: Date.now(),
-                waitDurations: part.waitDurations,
-                current_ring: 0
-            };
-            const files = yield copyInitialFiles(part);
+            const files = yield copyInitialFiles(part, currentCommit);
             hasChanged = true;
             const readableBodyText = (0, dedent_js_1.default)(`
     This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
@@ -159,8 +154,18 @@ function handlePush() {
     The files impacted by this rollout are:
 
     ${files.map(file => `- \`${file}\``).join('\n')}
+
+    ---
+
+    Initiation commit: ${currentCommit}
     
     `);
+            const initalState = {
+                last_rollout_timestamp: Date.now(),
+                waitDurations: part.waitDurations,
+                current_ring: 0,
+                sourceSha: currentCommit
+            };
             const issue = yield octokit.rest.issues.create({
                 owner: github.context.repo.owner,
                 repo: github.context.repo.repo,
@@ -184,7 +189,7 @@ function handlePush() {
         }
     });
 }
-function copyInitialFiles(part) {
+function copyInitialFiles(part, commitSha) {
     return __awaiter(this, void 0, void 0, function* () {
         const target = path.join(part.target, '0');
         const files = yield getFiles(part.filePattern);
@@ -199,6 +204,7 @@ function copyInitialFiles(part) {
             fs.copyFileSync(file, targetFile);
             copiedFiles.push(targetFile);
         }
+        fs.writeFileSync(path.join(target, '.commit'), commitSha);
         return copiedFiles;
     });
 }
@@ -272,6 +278,23 @@ function handleTick() {
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
                 hasChanged = true;
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, issue.labels);
+                if (state.abort) {
+                    yield octokit.rest.issues.createComment({
+                        owner: github.context.repo.owner,
+                        repo: github.context.repo.repo,
+                        issue_number: issue.number,
+                        body: `Rollout aborted`
+                    });
+                }
+                else {
+                    // comment on the issue
+                    yield octokit.rest.issues.createComment({
+                        owner: github.context.repo.owner,
+                        repo: github.context.repo.repo,
+                        issue_number: issue.number,
+                        body: `Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}`
+                    });
+                }
             }
             // Close the issue if the state is finished
             const shouldClose = isShouldCloseIssue(newState, flags);
@@ -291,11 +314,15 @@ function handleTick() {
     });
 }
 function isShouldCloseIssue(state, flags) {
+    var _a;
     if (flags.isAborted) {
         return { yes: true, reason: 'not_planned' };
     }
     if (state.current_ring >= state.waitDurations.length) {
         return { yes: true, reason: 'completed' };
+    }
+    if ((_a = state.abort) !== null && _a !== void 0 ? _a : false) {
+        return { yes: true, reason: 'not_planned' };
     }
     return { yes: false, reason: '' };
 }
@@ -311,7 +338,7 @@ function getNextState(currentState, part, flags) {
         if (currentState.current_ring < currentState.waitDurations.length) {
             if (flags.isAborted) {
                 core.info('Rollout is aborted. Skipping...');
-                return currentState;
+                return Object.assign(Object.assign({}, currentState), { abort: true });
             }
             if (flags.isPaused) {
                 core.info('Rollout is paused. Skipping...');
@@ -339,12 +366,15 @@ function increaseRing(currentState, part) {
         const currentRingLocation = `${part.target}/${currentState.current_ring}`;
         const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`;
         core.info(`Copy files from ${currentRingLocation} to ${nextRingLocation}`);
+        // read currents ring commit
+        const commitSha = fs.readFileSync(`${currentRingLocation}/.commit`, 'utf8');
+        if (commitSha !== currentState.sourceSha) {
+            core.warning(`Source commit ${currentState.sourceSha} does not match current ring commit ${commitSha}. Abort...`);
+            return Object.assign(Object.assign({}, currentState), { abort: true });
+        }
         // Copy files from current ring to next ring
         yield copyFolder(currentRingLocation, nextRingLocation);
-        return Object.assign(Object.assign({}, currentState), {
-            last_rollout_timestamp: Date.now(),
-            current_ring: currentState.current_ring + 1
-        });
+        return Object.assign(Object.assign({}, currentState), { last_rollout_timestamp: Date.now(), current_ring: currentState.current_ring + 1 });
     });
 }
 function copyFolder(src, dest) {
