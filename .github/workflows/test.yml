@@ -11,7 +11,7 @@ on: # rebuild any PRs and main branch changes
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
