@@ -116,23 +116,24 @@ function handlePush() {
         const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
             return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
-        core.info(`Issues found: ${issues.map(issue => issue.title)}`);
         //find all parts without an open issue
         const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => issue.labels.some((label) => label.name === part.name)));
         for (const part of partsWithoutIssue) {
+            core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
             const initalState = {
                 number_of_rings: 0,
                 current_ring: 0
             };
             copyInitialFiles(part);
-            yield octokit.rest.issues.create({
+            const issue = yield octokit.rest.issues.create({
                 owner: github.context.repo.owner,
                 repo: github.context.repo.repo,
                 title: `Rollout ${part.name}`,
                 body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
                 labels: [`part:${part.name}`]
             });
+            core.info(`Created issue ${issue.data.number} for part ${part.name}`);
         }
     });
 }
@@ -144,6 +145,7 @@ function copyInitialFiles(part) {
         for (const file of files) {
             const targetFile = path.join(target, path.basename(file));
             core.info(`Copying ${file} to ${targetFile}`);
+            fs.mkdirSync(path.dirname(targetFile), { recursive: true });
             fs.copyFileSync(file, targetFile);
         }
     });

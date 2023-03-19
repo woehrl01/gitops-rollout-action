@@ -110,8 +110,6 @@ async function handlePush(): Promise<void> {
     )
   )
 
-  core.info(`Issues found: ${issues.map(issue => issue.title)}`)
-
   //find all parts without an open issue
   const partsWithoutIssue = config.parts.filter(
     part =>
@@ -120,7 +118,10 @@ async function handlePush(): Promise<void> {
       )
   )
 
+
   for (const part of partsWithoutIssue) {
+
+    core.info(`Initalize part ${part.name}`)
     //create a new issue for the part
     const initalState = {
       number_of_rings: 0,
@@ -129,13 +130,15 @@ async function handlePush(): Promise<void> {
 
     copyInitialFiles(part)
 
-    await octokit.rest.issues.create({
+    const issue = await octokit.rest.issues.create({
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
       title: `Rollout ${part.name}`,
       body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
       labels: [`part:${part.name}`]
     })
+
+    core.info(`Created issue ${issue.data.number} for part ${part.name}`)
   }
 }
 
@@ -149,6 +152,8 @@ async function copyInitialFiles(part: Part): Promise<void> {
     const targetFile = path.join(target, path.basename(file))
 
     core.info(`Copying ${file} to ${targetFile}`)
+
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true })
 
     fs.copyFileSync(file, targetFile)
   }
