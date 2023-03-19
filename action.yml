@@ -2,10 +2,26 @@ name: 'Your name here'
 description: 'Provide a description here'
 author: 'Your name or organization here'
 inputs:
-  repo-token: # change this
-    required: true
+  token: # change this
+    required: false
     description: 'input description here'
-    default: 'default value if applicable'
+    default: ${{ secrets.GITHUB_TOKEN }}
+  config-file: # change this
+    required: false
+    description: 'input description here'
+    default: '.github/rollout.yaml'
+  commit-message: # change this
+    required: false
+    description: 'input description here'
+    default: 'chore: rollout'
+  duplicate-handling: # change this
+    required: false
+    description: 'input description here'
+    default: 'queue'
+  title: # change this
+    required: false
+    description: 'input description here'
+    default: 'Rollout {name}'
 runs:
   using: 'node16'
   main: 'dist/index.js'

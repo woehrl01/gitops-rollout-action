@@ -9,21 +9,49 @@ import glob from 'glob'
 import { simpleGit, SimpleGit } from 'simple-git'
 import { minimatch } from 'minimatch'
 import dedent from 'dedent-js'
+import { parse } from 'yaml'
+
+interface InputConfig {
+  title: string
+  token: string
+  duplicateHandling: string
+  commitMessage: string,
+  config: Config
+}
 
 async function run(): Promise<void> {
   try {
     const context = github.context
     const eventType = context.eventName
 
+    core.info(`Event type: ${eventType}`)
+
+    const inputConfig = getInputConfig()
+
     if (eventType === 'schedule' || eventType === 'workflow_dispatch') {
-      await handleTick()
+      await handleTick(inputConfig)
     } else if (eventType === 'push') {
-      await handlePush()
+      await handlePush(inputConfig)
     } else {
       core.warning('This action is not configured to handle this event type.')
     }
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
+  }
+}
+
+function getInputConfig(): InputConfig {
+
+  const configPath = core.getInput('config-file', { required: true })
+
+  const configFileContent = fs.readFileSync(configPath, 'utf8')
+
+  return {
+    title: core.getInput('title', { required: true }),
+    token: core.getInput('token', { required: true }),
+    duplicateHandling: core.getInput('duplicate-handling', { required: true }),
+    commitMessage: core.getInput('commit-message', { required: true }),
+    config: parse(configFileContent) as Config
   }
 }
 
@@ -42,17 +70,6 @@ async function findIssueWithLabel(
   })
 
   return issues.length > 0 ? issues[0] : null
-}
-
-const config: Config = {
-  parts: [
-    {
-      name: 'part1',
-      filePattern: 'part1/**',
-      target: 'generated/part1',
-      waitDurations: ['5m', '10m', '15m']
-    }
-  ]
 }
 
 const git: SimpleGit = simpleGit()
@@ -76,9 +93,8 @@ interface State {
   abort?: boolean
 }
 
-async function handlePush(): Promise<void> {
-  const token = core.getInput('repo-token', { required: true })
-  const octokit = github.getOctokit(token)
+async function handlePush(inputConfig: InputConfig): Promise<void> {
+  const octokit = github.getOctokit(inputConfig.token)
 
   const currentCommit = github.context.sha
   const parentCommit = github.context.payload.before
@@ -88,7 +104,7 @@ async function handlePush(): Promise<void> {
   core.info(`Changed files: ${changedFiles.join(', ')}`)
 
   //get all parts that have changed files
-  const changedParts = config.parts.filter(part =>
+  const changedParts = inputConfig.config.parts.filter(part =>
     changedFiles.some((file: string) => minimatch(file, part.filePattern))
   )
 
@@ -115,11 +131,14 @@ async function handlePush(): Promise<void> {
     )
   )
 
+
+  const isAbortHandling = inputConfig.duplicateHandling === 'abort'
+
   let hasChanged = false
   for (const partWithIssue of partsWithIssue) {
     const part = partWithIssue.part
 
-    if (partWithIssue.issue) {
+    if (partWithIssue.issue && isAbortHandling) {
       core.info(`Found existing issue ${partWithIssue.issue.number} for part ${part.name}. Recreating it.`)
 
       //close the issue
@@ -130,7 +149,6 @@ async function handlePush(): Promise<void> {
         state: 'closed',
         state_reason: 'not_planned'
       })
-
     }
 
     core.info(`Initialize part ${part.name}`)
@@ -170,17 +188,21 @@ async function handlePush(): Promise<void> {
       sourceSha: currentCommit
     }
 
+    const title = inputConfig.title
+
+    const issueTitle = title.replace('{name}', part.name)
+
     const issue = await octokit.rest.issues.create({
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
-      title: `Rollout ${part.name}`,
+      title: issueTitle,
       body: `${readableBodyText} <!-- STATE: ${JSON.stringify(initalState)} -->`,
-      labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`]
+      labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`, 'rollout']
     })
 
     core.info(`Created issue ${issue.data.number} for part ${part.name}`)
 
-    if (partWithIssue.issue) {
+    if (partWithIssue.issue && isAbortHandling) {
       //add a comment to the issue
       await octokit.rest.issues.createComment({
         owner: github.context.repo.owner,
@@ -192,7 +214,7 @@ async function handlePush(): Promise<void> {
   }
 
   if (hasChanged) {
-    await commitAndPush()
+    await commitAndPush(inputConfig)
   }
 }
 
@@ -236,7 +258,7 @@ async function getFiles(pattern: string): Promise<string[]> {
   })
 }
 
-async function commitAndPush(): Promise<void> {
+async function commitAndPush(inputConfig: InputConfig): Promise<void> {
   const status = await git.status()
   if (status.files.length === 0) {
     core.info('No changes to commit')
@@ -248,7 +270,9 @@ async function commitAndPush(): Promise<void> {
 
   await git.add('.')
 
-  await git.commit('Update parts')
+  const commitMessage = inputConfig.commitMessage
+
+  await git.commit(commitMessage)
 
   for (const retry of [1, 2, 3]) {
     try {
@@ -266,40 +290,32 @@ async function commitAndPush(): Promise<void> {
   core.info(`Committed and pushed changes`)
 }
 
-async function handleTick(): Promise<void> {
-  // Find all open issues of parts
-  const token = core.getInput('repo-token', { required: true })
-  const octokit = github.getOctokit(token)
+async function handleTick(inputConfig: InputConfig): Promise<void> {
+  const octokit = github.getOctokit(inputConfig.token)
 
-  const partsWithIssues = await Promise.all(
-    config.parts.map(async part => {
-      return {
-        part,
-        issue: await findIssueWithLabel(
-          octokit,
-          github.context.repo.owner,
-          github.context.repo.repo,
-          `part:${part.name}`
-        )
-      }
-    })
-  )
+  const { data: allOpenRolloutIssues } = await octokit.rest.issues.listForRepo({
+    owner: github.context.repo.owner,
+    repo: github.context.repo.repo,
+    state: 'open',
+    labels: 'rollout'
+  })
+
+  //sort ascending by issue number
+  allOpenRolloutIssues.sort((a, b) => a.number - b.number)
 
   // Iterate over all issues
   let hasChanged = false
-  for (const partWithIssue of partsWithIssues) {
-    if (!partWithIssue.issue) {
-      core.info(`No issue found for part ${partWithIssue.part.name}`)
-      continue
-    }
+  for (const issue of allOpenRolloutIssues) {
 
-    const issue = partWithIssue.issue
-    const part = partWithIssue.part
+    const labels = (issue.labels || []) as { name: string }[]
+
+    // Get the part name from the issue
+    const part = getPartFromLabels(inputConfig.config.parts, labels)
 
     // Get the state from the issue body
-    const state = getStateFromBody(issue.body)
+    const state = getStateFromBody(issue.body || '')
 
-    const flags = getFlagsFromLabels(issue.labels)
+    const flags = getFlagsFromLabels(labels)
 
     // Get the next state
     const newState = await getNextState(state, part, flags)
@@ -313,7 +329,7 @@ async function handleTick(): Promise<void> {
         github.context.repo.repo,
         issue.number,
         newState,
-        issue.labels
+        labels
       )
 
       if (state.abort) {
@@ -349,7 +365,7 @@ async function handleTick(): Promise<void> {
   }
 
   if (hasChanged) {
-    await commitAndPush()
+    await commitAndPush(inputConfig)
   }
 }
 
@@ -362,6 +378,22 @@ interface FlagsFromLabels {
 interface ShouldCloseResponse {
   yes: boolean
   reason: string
+}
+
+function getPartFromLabels(parts: Part[], labels: { name: string }[]): Part {
+  const partLabel = labels.find(label => label.name.startsWith('part:'))
+  if (!partLabel) {
+    throw new Error('No part label found')
+  }
+
+  const partName = partLabel.name.replace('part:', '')
+
+  const part = parts.find(p => p.name === partName)
+  if (!part) {
+    throw new Error(`Part ${partName} not found`)
+  }
+
+  return part
 }
 
 function isShouldCloseIssue(state: State, flags: FlagsFromLabels): ShouldCloseResponse {

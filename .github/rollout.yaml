@@ -1,0 +1,8 @@
+parts:
+  - name: part1
+    filePattern: part1/**
+    target: generated/part1
+    waitDurations:
+      - '5m'
+      - '10m'
+      - '15m'

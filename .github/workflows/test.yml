@@ -36,4 +36,4 @@ jobs:
           fetch-depth: 0
       - uses: ./ # uses an action in the root directory
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
