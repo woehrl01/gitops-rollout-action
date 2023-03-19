@@ -3,9 +3,9 @@ description: 'Provide a description here'
 author: 'Your name or organization here'
 inputs:
   token: # change this
-    required: false
+    required: true
     description: 'input description here'
-    default: '${{ secrets.GITHUB_TOKEN }}'
+    default: ''
   config-file: # change this
     required: false
     description: 'input description here'
