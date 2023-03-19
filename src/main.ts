@@ -126,9 +126,10 @@ async function handlePush(): Promise<void> {
     core.info(`Initalize part ${part.name}`)
     //create a new issue for the part
     const initalState = {
-      number_of_rings: 0,
+      last_rollout_timestamp: Date.now(),
+      waitDurations: part.waitDurations,
       current_ring: 0
-    }
+    } as State
 
     copyInitialFiles(part)
 
@@ -137,7 +138,7 @@ async function handlePush(): Promise<void> {
       repo: github.context.repo.repo,
       title: `Rollout ${part.name}`,
       body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
-      labels: [`part:${part.name}`]
+      labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`]
     })
 
     core.info(`Created issue ${issue.data.number} for part ${part.name}`)
