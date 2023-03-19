@@ -238,6 +238,7 @@ function handleTick() {
                 });
             }
         }
+        yield commitAndPush();
     });
 }
 function isShouldCloseIssue(state, flags) {
