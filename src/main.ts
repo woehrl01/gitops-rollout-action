@@ -178,7 +178,7 @@ async function handlePush(): Promise<void> {
       await octokit.rest.issues.createComment({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
-        issue_number: partWithIssue.issue.data.number,
+        issue_number: partWithIssue.issue.number,
         body: `This rollout has been recreated as ${issue.data.number}`
       })
     }
