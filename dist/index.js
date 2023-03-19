@@ -38,10 +38,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/semi */
-/* eslint-disable no-console */
 /* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-console */
 const core = __importStar(__nccwpck_require__(2186));
 const fs = __importStar(__nccwpck_require__(5747));
 const github = __importStar(__nccwpck_require__(5438));
@@ -76,7 +75,7 @@ function findIssueWithLabel(octokit, owner, repo, label) {
             owner,
             repo,
             labels: label,
-            state: 'open',
+            state: 'open'
         });
         return issues.length > 0 ? issues[0] : null;
     });
@@ -93,7 +92,7 @@ function findOrCreateIssueWithLabel(octokit, owner, repo, label) {
             repo,
             title: 'State Machine Issue',
             body: `<!-- STATE: ${JSON.stringify({})} -->`,
-            labels: [label],
+            labels: [label]
         });
         return newIssue;
     });
@@ -104,8 +103,8 @@ const config = {
             name: 'part1',
             filePattern: 'part1/**',
             target: 'generated/part1',
-            waitDurations: ["5m", "10m", "15m"]
-        },
+            waitDurations: ['5m', '10m', '15m']
+        }
     ]
 };
 function handlePush() {
@@ -117,14 +116,16 @@ function handlePush() {
         //get all parts that have changed files
         const changedParts = config.parts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
         //get all issues that have a label of a changed part
-        const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () { return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name); })));
+        const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
+            return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+        })));
         //find all parts without an open issue
         const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => issue.labels.some((label) => label.name === part.name)));
         for (const part of partsWithoutIssue) {
             //create a new issue for the part
             const initalState = {
                 number_of_rings: 0,
-                current_ring: 0,
+                current_ring: 0
             };
             copyInitialFiles(part);
             yield octokit.rest.issues.create({
@@ -132,7 +133,7 @@ function handlePush() {
                 repo: github.context.repo.repo,
                 title: `Rollout ${part.name}`,
                 body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
-                labels: [`part:${part.name}`],
+                labels: [`part:${part.name}`]
             });
         }
     });
@@ -168,7 +169,9 @@ function handleSchedule() {
         // Find all open issues of parts
         const token = core.getInput('repo-token', { required: true });
         const octokit = github.getOctokit(token);
-        const issues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () { return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name); })));
+        const issues = yield Promise.all(config.parts.map((part) => __awaiter(this, void 0, void 0, function* () {
+            return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
+        })));
         // Iterate over all issues
         for (const issue of issues) {
             // Get the state from the issue body
@@ -207,7 +210,7 @@ function getFlagsFromLabels(labels) {
     return {
         isFastlane: labels.some(label => label.name === 'fastlane'),
         isPaused: labels.some(label => label.name === 'paused'),
-        isAborted: labels.some(label => label.name === 'abort'),
+        isAborted: labels.some(label => label.name === 'abort')
     };
 }
 function getNextState(currentState, part, flags) {
@@ -245,7 +248,7 @@ function increaseRing(currentState, part) {
         yield copyFolder(currentRingLocation, nextRingLocation);
         return Object.assign(Object.assign({}, currentState), {
             last_rollout_timestamp: Date.now(),
-            current_ring: currentState.current_ring + 1,
+            current_ring: currentState.current_ring + 1
         });
     });
 }
@@ -288,7 +291,10 @@ function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentL
             repo,
             issue_number: issueNumber,
             body: newBody,
-            labels: [`ring:${newState.current_ring}/${newState.waitDurations.length}`, ...keepLabels],
+            labels: [
+                `ring:${newState.current_ring}/${newState.waitDurations.length}`,
+                ...keepLabels
+            ]
         });
     });
 }

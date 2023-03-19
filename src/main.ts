@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/semi */
-/* eslint-disable no-console */
 /* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-console */
 import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as github from '@actions/github'
 import * as path from 'path'
 import glob from 'glob'
-import {minimatch} from 'minimatch'
+import { minimatch } from 'minimatch'
 
 async function run(): Promise<void> {
   try {
@@ -33,7 +32,7 @@ async function findIssueWithLabel(
   repo: string,
   label: string
 ): Promise<any> {
-  const {data: issues} = await octokit.rest.issues.listForRepo({
+  const { data: issues } = await octokit.rest.issues.listForRepo({
     owner,
     repo,
     labels: label,
@@ -59,7 +58,7 @@ async function findOrCreateIssueWithLabel(
     `No open issue found with the label "${label}". Creating a new one...`
   )
 
-  const {data: newIssue} = await octokit.rest.issues.create({
+  const { data: newIssue } = await octokit.rest.issues.create({
     owner,
     repo,
     title: 'State Machine Issue',
@@ -99,7 +98,7 @@ interface State {
 }
 
 async function handlePush(): Promise<void> {
-  const token = core.getInput('repo-token', {required: true})
+  const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)
 
   //get all changed files of commit
@@ -128,7 +127,7 @@ async function handlePush(): Promise<void> {
   const partsWithoutIssue = config.parts.filter(
     part =>
       !issues.some(issue =>
-        issue.labels.some((label: {name: string}) => label.name === part.name)
+        issue.labels.some((label: { name: string }) => label.name === part.name)
       )
   )
 
@@ -180,7 +179,7 @@ async function getFiles(pattern: string): Promise<string[]> {
 
 async function handleSchedule(): Promise<void> {
   // Find all open issues of parts
-  const token = core.getInput('repo-token', {required: true})
+  const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)
 
   const issues = await Promise.all(
@@ -201,7 +200,7 @@ async function handleSchedule(): Promise<void> {
 
     // Get the part for the issue
     const part = config.parts.find(p =>
-      issue.labels.some((label: {name: string}) => label.name === p.name)
+      issue.labels.some((label: { name: string }) => label.name === p.name)
     )
 
     if (!part) {
@@ -250,7 +249,7 @@ function isShouldCloseIssue(state: State, flags: FlagsFromLabels): boolean {
   return state.current_ring >= state.waitDurations.length
 }
 
-function getFlagsFromLabels(labels: {name: string}[]): FlagsFromLabels {
+function getFlagsFromLabels(labels: { name: string }[]): FlagsFromLabels {
   return {
     isFastlane: labels.some(label => label.name === 'fastlane'),
     isPaused: labels.some(label => label.name === 'paused'),
@@ -316,11 +315,11 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
 async function copyFolder(src: string, dest: string): Promise<void> {
   // Create the destination directory if it doesn't exist
   if (!fs.existsSync(dest)) {
-    fs.mkdirSync(dest, {recursive: true})
+    fs.mkdirSync(dest, { recursive: true })
   }
 
   // Read the source directory
-  const entries = fs.readdirSync(src, {withFileTypes: true})
+  const entries = fs.readdirSync(src, { withFileTypes: true })
 
   // Iterate through the entries and handle files and directories separately
   for (const entry of entries) {
@@ -350,7 +349,7 @@ async function updateStateInBody(
   repo: string,
   issueNumber: number,
   newState: State,
-  currentLabels: {name: string}[]
+  currentLabels: { name: string }[]
 ): Promise<void> {
   const issue = await findOrCreateIssueWithLabel(octokit, owner, repo, 'abc')
 
