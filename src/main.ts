@@ -1,6 +1,5 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable no-console */
 import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as github from '@actions/github'
@@ -55,7 +54,7 @@ async function findOrCreateIssueWithLabel(
     return issue
   }
 
-  console.log(
+  core.info(
     `No open issue found with the label "${label}". Creating a new one...`
   )
 
@@ -111,17 +110,17 @@ async function handlePush(): Promise<void> {
   // convert buffer to string
   const changedFiles = buffer.toString().split('\n')
 
-  console.log(`Changed files: ${changedFiles.join(', ')}`)
+  core.info(`Changed files: ${changedFiles.join(', ')}`)
 
   //get all parts that have changed files
   const changedParts = config.parts.filter(part =>
     changedFiles.some((file: string) => minimatch(file, part.filePattern))
   )
 
-  console.log(`Changed parts: ${changedParts.map(part => part.name)}`)
+  core.info(`Changed parts: ${changedParts.map(part => part.name)}`)
 
   if (changedParts.length === 0) {
-    console.log('No changed parts found. Nothing to do.')
+    core.info('No changed parts found. Nothing to do.')
     return
   }
 
@@ -137,7 +136,7 @@ async function handlePush(): Promise<void> {
     )
   )
 
-  console.log(`Issues found: ${issues.map(issue => issue.title)}`)
+  core.info(`Issues found: ${issues.map(issue => issue.title)}`)
 
   //find all parts without an open issue
   const partsWithoutIssue = config.parts.filter(
@@ -175,7 +174,7 @@ async function copyInitialFiles(part: Part): Promise<void> {
   for (const file of files) {
     const targetFile = path.join(target, path.basename(file))
 
-    console.log(`Copying ${file} to ${targetFile}`)
+    core.info(`Copying ${file} to ${targetFile}`)
 
     fs.copyFileSync(file, targetFile)
   }
@@ -280,17 +279,17 @@ async function getNextState(
 ): Promise<any> {
   if (currentState.current_ring < currentState.waitDurations.length) {
     if (flags.isAborted) {
-      console.log('Rollout is aborted. Skipping...')
+      core.info('Rollout is aborted. Skipping...')
       return currentState
     }
 
     if (flags.isPaused) {
-      console.log('Rollout is paused. Skipping...')
+      core.info('Rollout is paused. Skipping...')
       return currentState
     }
 
     if (flags.isFastlane) {
-      console.log('Fastlane is enabled. increase ring...')
+      core.info('Fastlane is enabled. increase ring...')
       return increaseRing(currentState, part)
     }
 
@@ -300,7 +299,7 @@ async function getNextState(
       Date.now() - currentState.last_rollout_timestamp
 
     if (timeSinceLastRollout < waitDurationInMs) {
-      console.log(
+      core.info(
         `Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`
       )
       return currentState

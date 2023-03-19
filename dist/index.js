@@ -44,7 +44,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable no-console */
 const core = __importStar(__nccwpck_require__(2186));
 const fs = __importStar(__nccwpck_require__(7147));
 const github = __importStar(__nccwpck_require__(5438));
@@ -91,7 +90,7 @@ function findOrCreateIssueWithLabel(octokit, owner, repo, label) {
         if (issue) {
             return issue;
         }
-        console.log(`No open issue found with the label "${label}". Creating a new one...`);
+        core.info(`No open issue found with the label "${label}". Creating a new one...`);
         const { data: newIssue } = yield octokit.rest.issues.create({
             owner,
             repo,
@@ -122,19 +121,19 @@ function handlePush() {
         const buffer = (0, child_process_1.execSync)(`git diff --name-only ${parentCommit} ${currentCommit}`);
         // convert buffer to string
         const changedFiles = buffer.toString().split('\n');
-        console.log(`Changed files: ${changedFiles.join(', ')}`);
+        core.info(`Changed files: ${changedFiles.join(', ')}`);
         //get all parts that have changed files
         const changedParts = config.parts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
-        console.log(`Changed parts: ${changedParts.map(part => part.name)}`);
+        core.info(`Changed parts: ${changedParts.map(part => part.name)}`);
         if (changedParts.length === 0) {
-            console.log('No changed parts found. Nothing to do.');
+            core.info('No changed parts found. Nothing to do.');
             return;
         }
         //get all issues that have a label of a changed part
         const issues = yield Promise.all(changedParts.map((part) => __awaiter(this, void 0, void 0, function* () {
             return findOrCreateIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
-        console.log(`Issues found: ${issues.map(issue => issue.title)}`);
+        core.info(`Issues found: ${issues.map(issue => issue.title)}`);
         //find all parts without an open issue
         const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => issue.labels.some((label) => label.name === part.name)));
         for (const part of partsWithoutIssue) {
@@ -161,7 +160,7 @@ function copyInitialFiles(part) {
         const files = yield getFiles(part.filePattern);
         for (const file of files) {
             const targetFile = path.join(target, path.basename(file));
-            console.log(`Copying ${file} to ${targetFile}`);
+            core.info(`Copying ${file} to ${targetFile}`);
             fs.copyFileSync(file, targetFile);
         }
     });
@@ -233,22 +232,22 @@ function getNextState(currentState, part, flags) {
     return __awaiter(this, void 0, void 0, function* () {
         if (currentState.current_ring < currentState.waitDurations.length) {
             if (flags.isAborted) {
-                console.log('Rollout is aborted. Skipping...');
+                core.info('Rollout is aborted. Skipping...');
                 return currentState;
             }
             if (flags.isPaused) {
-                console.log('Rollout is paused. Skipping...');
+                core.info('Rollout is paused. Skipping...');
                 return currentState;
             }
             if (flags.isFastlane) {
-                console.log('Fastlane is enabled. increase ring...');
+                core.info('Fastlane is enabled. increase ring...');
                 return increaseRing(currentState, part);
             }
             const waitDuration = currentState.waitDurations[currentState.current_ring];
             const waitDurationInMs = parseGolangDuration(waitDuration);
             const timeSinceLastRollout = Date.now() - currentState.last_rollout_timestamp;
             if (timeSinceLastRollout < waitDurationInMs) {
-                console.log(`Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`);
+                core.info(`Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`);
                 return currentState;
             }
             return increaseRing(currentState, part);
