@@ -113,11 +113,23 @@ async function handlePush(): Promise<void> {
     )
   )
 
-  //find all parts without an open issue
-  const partsWithoutIssue = partsWithIssue.filter(partWithIssue => partWithIssue.issue === null).map(partWithIssue => partWithIssue.part)
+  let hasChanged = false
+  for (const partWithIssue of partsWithIssue) {
+    const part = partWithIssue.part
 
+    if (partWithIssue.issue) {
+      core.info(`Found existing issue ${partWithIssue.issue.number} for part ${part.name}. Recreating it.`)
 
-  for (const part of partsWithoutIssue) {
+      //close the issue
+      await octokit.rest.issues.update({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        issue_number: partWithIssue.issue.number,
+        state: 'closed',
+        state_reason: 'not_planned'
+      })
+
+    }
 
     core.info(`Initalize part ${part.name}`)
     //create a new issue for the part
@@ -127,27 +139,69 @@ async function handlePush(): Promise<void> {
       current_ring: 0
     } as State
 
-    copyInitialFiles(part)
+    const files = await copyInitialFiles(part)
+    hasChanged = true
+
+    const readableBodyText = `
+    This issue is used to track the rollout of the part ${part.name}.
+
+    The rollout is split into ${part.waitDurations.length} rings.
+
+    The rollout is executed in the following timeframes:
+
+    ${part.waitDurations.map((duration, index) => `- Ring ${index + 1}: ${duration}`).join('\n')}
+
+    The rollout is finished when all rings are active.
+
+    The current state of the rollout is tracked via the labels of the issues.
+
+    You can use the following labels to control the rollout:
+
+    - \`abort\`: Abort the rollout
+    - \`pause\`: Pause the rollout
+    - \`fasttrack\`: Fasttrack the rollout to the next ring, on the next tick
+
+    ---
+
+    The following files are affected by this rollout:
+
+    ${files.map(file => `- \`${file}\``).join('\n')}
+    
+    `
 
     const issue = await octokit.rest.issues.create({
       owner: github.context.repo.owner,
       repo: github.context.repo.repo,
       title: `Rollout ${part.name}`,
-      body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
+      body: `${readableBodyText} <!-- STATE: ${JSON.stringify(initalState)} -->`,
       labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`]
     })
 
     core.info(`Created issue ${issue.data.number} for part ${part.name}`)
+
+    if (partWithIssue.issue) {
+      //add a comment to the issue
+      await octokit.rest.issues.createComment({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        issue_number: partWithIssue.issue.data.number,
+        body: `This rollout has been recreated as ${issue.data.number}`
+      })
+    }
   }
 
-  await commitAndPush()
+  if (hasChanged) {
+    await commitAndPush()
+  }
 }
 
-async function copyInitialFiles(part: Part): Promise<void> {
+async function copyInitialFiles(part: Part): Promise<string[]> {
   const target = path.join(part.target, '0')
 
   //copy all files from part.filePattern to part.target
   const files = await getFiles(part.filePattern)
+
+  const copiedFiles: string[] = []
 
   for (const file of files) {
     if (fs.lstatSync(file).isDirectory()) {
@@ -161,7 +215,11 @@ async function copyInitialFiles(part: Part): Promise<void> {
     fs.mkdirSync(path.dirname(targetFile), { recursive: true })
 
     fs.copyFileSync(file, targetFile)
+
+    copiedFiles.push(file)
   }
+
+  return copiedFiles
 }
 
 async function getFiles(pattern: string): Promise<string[]> {
@@ -226,6 +284,7 @@ async function handleTick(): Promise<void> {
   )
 
   // Iterate over all issues
+  let hasChanged = false
   for (const partWithIssue of partsWithIssues) {
     if (!partWithIssue.issue) {
       core.info(`No issue found for part ${partWithIssue.part.name}`)
@@ -245,6 +304,7 @@ async function handleTick(): Promise<void> {
 
     // Only update the issue if the state has changed
     if (JSON.stringify(newState) !== JSON.stringify(state)) {
+      hasChanged = true
       await updateStateInBody(
         octokit,
         github.context.repo.owner,
@@ -268,7 +328,9 @@ async function handleTick(): Promise<void> {
     }
   }
 
-  await commitAndPush()
+  if (hasChanged) {
+    await commitAndPush()
+  }
 }
 
 interface FlagsFromLabels {

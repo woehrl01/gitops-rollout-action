@@ -118,9 +118,20 @@ function handlePush() {
                 issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, `part:${part.name}`)
             };
         })));
-        //find all parts without an open issue
-        const partsWithoutIssue = partsWithIssue.filter(partWithIssue => partWithIssue.issue === null).map(partWithIssue => partWithIssue.part);
-        for (const part of partsWithoutIssue) {
+        let hasChanged = false;
+        for (const partWithIssue of partsWithIssue) {
+            const part = partWithIssue.part;
+            if (partWithIssue.issue) {
+                core.info(`Found existing issue ${partWithIssue.issue.number} for part ${part.name}. Recreating it.`);
+                //close the issue
+                yield octokit.rest.issues.update({
+                    owner: github.context.repo.owner,
+                    repo: github.context.repo.repo,
+                    issue_number: partWithIssue.issue.number,
+                    state: 'closed',
+                    state_reason: 'not_planned'
+                });
+            }
             core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
             const initalState = {
@@ -128,17 +139,55 @@ function handlePush() {
                 waitDurations: part.waitDurations,
                 current_ring: 0
             };
-            copyInitialFiles(part);
+            const files = yield copyInitialFiles(part);
+            hasChanged = true;
+            const readableBodyText = `
+    This issue is used to track the rollout of the part ${part.name}.
+
+    The rollout is split into ${part.waitDurations.length} rings.
+
+    The rollout is executed in the following timeframes:
+
+    ${part.waitDurations.map((duration, index) => `- Ring ${index + 1}: ${duration}`).join('\n')}
+
+    The rollout is finished when all rings are active.
+
+    The current state of the rollout is tracked via the labels of the issues.
+
+    You can use the following labels to control the rollout:
+
+    - \`abort\`: Abort the rollout
+    - \`pause\`: Pause the rollout
+    - \`fasttrack\`: Fasttrack the rollout to the next ring, on the next tick
+
+    ---
+
+    The following files are affected by this rollout:
+
+    ${files.map(file => `- \`${file}\``).join('\n')}
+    
+    `;
             const issue = yield octokit.rest.issues.create({
                 owner: github.context.repo.owner,
                 repo: github.context.repo.repo,
                 title: `Rollout ${part.name}`,
-                body: `<!-- STATE: ${JSON.stringify(initalState)} -->`,
+                body: `${readableBodyText} <!-- STATE: ${JSON.stringify(initalState)} -->`,
                 labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`]
             });
             core.info(`Created issue ${issue.data.number} for part ${part.name}`);
+            if (partWithIssue.issue) {
+                //add a comment to the issue
+                yield octokit.rest.issues.createComment({
+                    owner: github.context.repo.owner,
+                    repo: github.context.repo.repo,
+                    issue_number: partWithIssue.issue.data.number,
+                    body: `This rollout has been recreated as ${issue.data.number}`
+                });
+            }
         }
-        yield commitAndPush();
+        if (hasChanged) {
+            yield commitAndPush();
+        }
     });
 }
 function copyInitialFiles(part) {
@@ -146,6 +195,7 @@ function copyInitialFiles(part) {
         const target = path.join(part.target, '0');
         //copy all files from part.filePattern to part.target
         const files = yield getFiles(part.filePattern);
+        const copiedFiles = [];
         for (const file of files) {
             if (fs.lstatSync(file).isDirectory()) {
                 continue;
@@ -154,7 +204,9 @@ function copyInitialFiles(part) {
             core.info(`Copying ${file} to ${targetFile}`);
             fs.mkdirSync(path.dirname(targetFile), { recursive: true });
             fs.copyFileSync(file, targetFile);
+            copiedFiles.push(file);
         }
+        return copiedFiles;
     });
 }
 function getFiles(pattern) {
@@ -210,6 +262,7 @@ function handleTick() {
             };
         })));
         // Iterate over all issues
+        let hasChanged = false;
         for (const partWithIssue of partsWithIssues) {
             if (!partWithIssue.issue) {
                 core.info(`No issue found for part ${partWithIssue.part.name}`);
@@ -224,6 +277,7 @@ function handleTick() {
             const newState = yield getNextState(state, part, flags);
             // Only update the issue if the state has changed
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
+                hasChanged = true;
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, issue.labels);
             }
             // Close the issue if the state is finished
@@ -238,7 +292,9 @@ function handleTick() {
                 });
             }
         }
-        yield commitAndPush();
+        if (hasChanged) {
+            yield commitAndPush();
+        }
     });
 }
 function isShouldCloseIssue(state, flags) {
