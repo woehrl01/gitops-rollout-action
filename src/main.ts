@@ -42,32 +42,6 @@ async function findIssueWithLabel(
   return issues.length > 0 ? issues[0] : null
 }
 
-async function findOrCreateIssueWithLabel(
-  octokit: ReturnType<typeof github.getOctokit>,
-  owner: string,
-  repo: string,
-  label: string
-): Promise<any> {
-  const issue = await findIssueWithLabel(octokit, owner, repo, label)
-
-  if (issue) {
-    return issue
-  }
-
-  core.info(
-    `No open issue found with the label "${label}". Creating a new one...`
-  )
-
-  const { data: newIssue } = await octokit.rest.issues.create({
-    owner,
-    repo,
-    title: 'State Machine Issue',
-    body: `<!-- STATE: ${JSON.stringify({})} -->`,
-    labels: [label]
-  })
-
-  return newIssue
-}
 
 const config: Config = {
   parts: [
@@ -127,7 +101,7 @@ async function handlePush(): Promise<void> {
   //get all issues that have a label of a changed part
   const issues = await Promise.all(
     changedParts.map(async part =>
-      findOrCreateIssueWithLabel(
+      findIssueWithLabel(
         octokit,
         github.context.repo.owner,
         github.context.repo.repo,
@@ -199,7 +173,7 @@ async function handleSchedule(): Promise<void> {
 
   const issues = await Promise.all(
     config.parts.map(async part =>
-      findOrCreateIssueWithLabel(
+      findIssueWithLabel(
         octokit,
         github.context.repo.owner,
         github.context.repo.repo,
@@ -366,9 +340,18 @@ async function updateStateInBody(
   newState: State,
   currentLabels: { name: string }[]
 ): Promise<void> {
-  const issue = await findOrCreateIssueWithLabel(octokit, owner, repo, 'abc')
 
-  const newBody = issue.body.replace(
+  const { data: issue } = await octokit.rest.issues.get({
+    owner,
+    repo,
+    issue_number: issueNumber
+  })
+
+  if (!issue) {
+    throw new Error(`Could not find issue ${issueNumber}`)
+  }
+
+  const newBody = (issue.body || '').replace(
     /<!-- STATE: (.*?) -->/,
     `<!-- STATE: ${JSON.stringify(newState)} -->`
   )
