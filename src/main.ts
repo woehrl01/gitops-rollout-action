@@ -91,6 +91,7 @@ interface State {
   current_ring: number
   sourceSha: string
   abort?: boolean
+  abortReason?: string
 }
 
 async function handlePush(inputConfig: InputConfig): Promise<void> {
@@ -337,7 +338,7 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
           issue_number: issue.number,
-          body: `Rollout aborted`
+          body: `Rollout aborted: ${newState.abortReason}`
         })
 
       } else {
@@ -430,7 +431,8 @@ async function getNextState(
       core.info('Rollout is aborted. Skipping...')
       return {
         ...currentState,
-        abort: true
+        abort: true,
+        abortReason: 'Aborted by user'
       }
     }
 
@@ -477,7 +479,8 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
     core.warning(`Source commit ${currentState.sourceSha} does not match current ring commit ${commitSha}. Abort...`)
     return {
       ...currentState,
-      abort: true
+      abort: true,
+      abortReason: `Source commit ${currentState.sourceSha} does not match current ring commit ${commitSha}. There must be another rollout for this part in the fastlane.`
     }
   }
 
