@@ -282,7 +282,7 @@ function handleTick(inputConfig) {
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
                 hasChanged = true;
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
-                if (state.abort) {
+                if (newState.abort) {
                     yield octokit.rest.issues.createComment({
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,

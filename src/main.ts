@@ -332,7 +332,7 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
         labels
       )
 
-      if (state.abort) {
+      if (newState.abort) {
         await octokit.rest.issues.createComment({
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
