@@ -192,7 +192,6 @@ async function handlePush(): Promise<void> {
 async function copyInitialFiles(part: Part): Promise<string[]> {
   const target = path.join(part.target, '0')
 
-  //copy all files from part.filePattern to part.target
   const files = await getFiles(part.filePattern)
 
   const copiedFiles: string[] = []

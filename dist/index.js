@@ -143,27 +143,21 @@ function handlePush() {
             const files = yield copyInitialFiles(part);
             hasChanged = true;
             const readableBodyText = (0, dedent_js_1.default)(`
-    This issue is used to track the rollout of the part ${part.name}.
+    This issue is dedicated to tracking the rollout of ${part.name}.
 
-    The rollout is split into ${part.waitDurations.length} rings.
-
-    The rollout is executed in the following timeframes:
+    The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 
     ${part.waitDurations.map((duration, index) => `- Ring ${index + 1}: ${duration}`).join('\n')}
 
-    The rollout is finished when all rings are active.
+    The rollout is considered complete when all rings are active. Progress is monitored using issue labels, which include:
 
-    The current state of the rollout is tracked via the labels of the issues.
-
-    You can use the following labels to control the rollout:
-
-    - \`abort\`: Abort the rollout
-    - \`pause\`: Pause the rollout
-    - \`fasttrack\`: Fasttrack the rollout to the next ring, on the next tick
+    - \`abort\`: Aborts the rollout
+    - \`pause\`: Pauses the rollout
+    - \`fasttrack\`: Advances the rollout to the next ring on the next tick
 
     ---
 
-    The following files are affected by this rollout:
+    The files impacted by this rollout are:
 
     ${files.map(file => `- \`${file}\``).join('\n')}
     
@@ -194,7 +188,6 @@ function handlePush() {
 function copyInitialFiles(part) {
     return __awaiter(this, void 0, void 0, function* () {
         const target = path.join(part.target, '0');
-        //copy all files from part.filePattern to part.target
         const files = yield getFiles(part.filePattern);
         const copiedFiles = [];
         for (const file of files) {
@@ -205,7 +198,7 @@ function copyInitialFiles(part) {
             core.info(`Copying ${file} to ${targetFile}`);
             fs.mkdirSync(path.dirname(targetFile), { recursive: true });
             fs.copyFileSync(file, targetFile);
-            copiedFiles.push(file);
+            copiedFiles.push(targetFile);
         }
         return copiedFiles;
     });
