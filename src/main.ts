@@ -189,6 +189,10 @@ async function handleSchedule(): Promise<void> {
 
   // Iterate over all issues
   for (const issue of issues) {
+    if (!issue) {
+      continue
+    }
+
     // Get the state from the issue body
     const state = getStateFromBody(issue.body)
 

@@ -174,6 +174,9 @@ function handleSchedule() {
         })));
         // Iterate over all issues
         for (const issue of issues) {
+            if (!issue) {
+                continue;
+            }
             // Get the state from the issue body
             const state = getStateFromBody(issue.body);
             // Get the part for the issue
