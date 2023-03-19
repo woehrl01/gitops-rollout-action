@@ -1,3 +1,5 @@
+/* eslint-disable import/named */
+/* eslint-disable import/no-named-as-default */
 /* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as core from '@actions/core'
@@ -6,7 +8,7 @@ import * as github from '@actions/github'
 import * as path from 'path'
 import glob from 'glob'
 import { minimatch } from 'minimatch'
-import { execSync } from 'child_process'
+import simpleGit, { SimpleGit } from 'simple-git'
 
 async function run(): Promise<void> {
   try {
@@ -42,7 +44,6 @@ async function findIssueWithLabel(
   return issues.length > 0 ? issues[0] : null
 }
 
-
 const config: Config = {
   parts: [
     {
@@ -53,6 +54,8 @@ const config: Config = {
     }
   ]
 }
+
+const git: SimpleGit = simpleGit()
 
 interface Config {
   parts: Part[]
@@ -78,11 +81,7 @@ async function handlePush(): Promise<void> {
   const currentCommit = github.context.sha
   const parentCommit = github.context.payload.before
 
-  // run shell command to get changed files
-  const buffer = execSync(`git diff --name-only ${parentCommit} ${currentCommit}`)
-
-  // convert buffer to string
-  const changedFiles = buffer.toString().split('\n')
+  const changedFiles = (await git.diff(['--name-only', parentCommit, currentCommit])).split('\n')
 
   core.info(`Changed files: ${changedFiles.join(', ')}`)
 
@@ -140,6 +139,8 @@ async function handlePush(): Promise<void> {
 
     core.info(`Created issue ${issue.data.number} for part ${part.name}`)
   }
+
+  await commitAndPush()
 }
 
 async function copyInitialFiles(part: Part): Promise<void> {
@@ -173,6 +174,25 @@ async function getFiles(pattern: string): Promise<string[]> {
       }
     })
   })
+}
+
+async function commitAndPush(): Promise<void> {
+  const status = await git.status()
+  if (status.files.length === 0) {
+    core.info('No changes to commit')
+    return
+  }
+
+  await git.addConfig('user.name', 'github-actions[bot]')
+  await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com')
+
+  await git.add('.')
+
+  await git.commit('Update parts')
+
+  await git.push()
+
+  core.info(`Committed and pushed changes`)
 }
 
 async function handleSchedule(): Promise<void> {
@@ -225,13 +245,14 @@ async function handleSchedule(): Promise<void> {
     }
 
     // Close the issue if the state is finished
-    if (isShouldCloseIssue(newState, flags)) {
+    const shouldClose = isShouldCloseIssue(newState, flags)
+    if (shouldClose.yes) {
       await octokit.rest.issues.update({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
         issue_number: issue.number,
         state: 'closed',
-        state_reason: flags.isAborted ? 'not_planned' : 'completed'
+        state_reason: shouldClose.reason
       })
     }
   }
@@ -243,11 +264,21 @@ interface FlagsFromLabels {
   isAborted: boolean
 }
 
-function isShouldCloseIssue(state: State, flags: FlagsFromLabels): boolean {
+interface ShouldCloseResponse {
+  yes: boolean
+  reason: string
+}
+
+function isShouldCloseIssue(state: State, flags: FlagsFromLabels): ShouldCloseResponse {
   if (flags.isAborted) {
-    return true
+    return { yes: true, reason: 'not_planned' }
   }
-  return state.current_ring >= state.waitDurations.length
+
+  if (state.current_ring >= state.waitDurations.length) {
+    return { yes: true, reason: 'completed' }
+  }
+
+  return { yes: false, reason: '' }
 }
 
 function getFlagsFromLabels(labels: { name: string }[]): FlagsFromLabels {
