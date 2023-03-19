@@ -303,6 +303,8 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
   const currentRingLocation = `${part.target}/${currentState.current_ring}`
   const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`
 
+  core.info(`Copy files from ${currentRingLocation} to ${nextRingLocation}`)
+
   // Copy files from current ring to next ring
   await copyFolder(currentRingLocation, nextRingLocation)
 
@@ -316,6 +318,11 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
 }
 
 async function copyFolder(src: string, dest: string): Promise<void> {
+  // check if source folder exists
+  if (fs.existsSync(src) === false) {
+    core.info(`Source folder ${src} does not exist`)
+    return
+  }
 
   // clear destination folder
   if (fs.existsSync(dest)) {

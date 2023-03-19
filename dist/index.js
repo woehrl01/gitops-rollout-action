@@ -257,6 +257,7 @@ function increaseRing(currentState, part) {
     return __awaiter(this, void 0, void 0, function* () {
         const currentRingLocation = `${part.target}/${currentState.current_ring}`;
         const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`;
+        core.info(`Copy files from ${currentRingLocation} to ${nextRingLocation}`);
         // Copy files from current ring to next ring
         yield copyFolder(currentRingLocation, nextRingLocation);
         return Object.assign(Object.assign({}, currentState), {
@@ -267,6 +268,11 @@ function increaseRing(currentState, part) {
 }
 function copyFolder(src, dest) {
     return __awaiter(this, void 0, void 0, function* () {
+        // check if source folder exists
+        if (fs.existsSync(src) === false) {
+            core.info(`Source folder ${src} does not exist`);
+            return;
+        }
         // clear destination folder
         if (fs.existsSync(dest)) {
             fs.rmdirSync(dest, { recursive: true });
