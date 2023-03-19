@@ -114,7 +114,7 @@ async function handlePush(): Promise<void> {
   const partsWithoutIssue = config.parts.filter(
     part =>
       !issues.some(issue =>
-        issue.labels.some((label: { name: string }) => label.name === part.name)
+        (issue.labels || []).some((label: { name: string }) => label.name === part.name)
       )
   )
 
@@ -228,7 +228,8 @@ async function handleSchedule(): Promise<void> {
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
         issue_number: issue.number,
-        state: 'closed'
+        state: 'closed',
+        state_reason: flags.isAborted ? 'not_planned' : 'completed'
       })
     }
   }

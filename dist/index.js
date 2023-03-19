@@ -117,7 +117,7 @@ function handlePush() {
             return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
         //find all parts without an open issue
-        const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => issue.labels.some((label) => label.name === part.name)));
+        const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => (issue.labels || []).some((label) => label.name === part.name)));
         for (const part of partsWithoutIssue) {
             core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
@@ -197,7 +197,8 @@ function handleSchedule() {
                     owner: github.context.repo.owner,
                     repo: github.context.repo.repo,
                     issue_number: issue.number,
-                    state: 'closed'
+                    state: 'closed',
+                    state_reason: flags.isAborted ? 'not_planned' : 'completed'
                 });
             }
         }
