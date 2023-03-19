@@ -7,6 +7,7 @@ import * as github from '@actions/github'
 import * as path from 'path'
 import glob from 'glob'
 import { minimatch } from 'minimatch'
+import { execSync } from 'child_process'
 
 async function run(): Promise<void> {
   try {
@@ -101,10 +102,13 @@ async function handlePush(): Promise<void> {
   const token = core.getInput('repo-token', { required: true })
   const octokit = github.getOctokit(token)
 
-  //get all changed files of commit
-  const changedFiles = github.context.payload.commits[0].added.concat(
-    github.context.payload.commits[0].modified
-  )
+  // run shell command to get changed files
+  const buffer = execSync('git diff --name-only HEAD~1 HEAD')
+
+  // convert buffer to string
+  const changedFiles = buffer.toString().split('\n')
+
+
 
   //get all parts that have changed files
   const changedParts = config.parts.filter(part =>

@@ -51,6 +51,7 @@ const github = __importStar(__nccwpck_require__(5438));
 const path = __importStar(__nccwpck_require__(1017));
 const glob_1 = __importDefault(__nccwpck_require__(1957));
 const minimatch_1 = __nccwpck_require__(2002);
+const child_process_1 = __nccwpck_require__(2081);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -115,8 +116,10 @@ function handlePush() {
     return __awaiter(this, void 0, void 0, function* () {
         const token = core.getInput('repo-token', { required: true });
         const octokit = github.getOctokit(token);
-        //get all changed files of commit
-        const changedFiles = github.context.payload.commits[0].added.concat(github.context.payload.commits[0].modified);
+        // run shell command to get changed files
+        const buffer = (0, child_process_1.execSync)('git diff --name-only HEAD~1 HEAD');
+        // convert buffer to string
+        const changedFiles = buffer.toString().split('\n');
         //get all parts that have changed files
         const changedParts = config.parts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
         //get all issues that have a label of a changed part
@@ -13469,6 +13472,14 @@ module.exports = eval("require")("encoding");
 
 "use strict";
 module.exports = require("assert");
+
+/***/ }),
+
+/***/ 2081:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("child_process");
 
 /***/ }),
 
