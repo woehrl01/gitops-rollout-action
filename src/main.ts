@@ -114,7 +114,7 @@ async function handlePush(): Promise<void> {
   const partsWithoutIssue = config.parts.filter(
     part =>
       !issues.some(issue =>
-        (issue.labels || []).some((label: { name: string }) => label.name === part.name)
+        (issue.labels || []).some((label: { name: string }) => label.name === `part:${part.name}`)
       )
   )
 
@@ -198,7 +198,7 @@ async function handleSchedule(): Promise<void> {
 
     // Get the part for the issue
     const part = config.parts.find(p =>
-      issue.labels.some((label: { name: string }) => label.name === p.name)
+      (issue.labels || []).some((label: { name: string }) => label.name === `part:${p.name}`)
     )
 
     if (!part) {

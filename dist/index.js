@@ -117,7 +117,7 @@ function handlePush() {
             return findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, part.name);
         })));
         //find all parts without an open issue
-        const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => (issue.labels || []).some((label) => label.name === part.name)));
+        const partsWithoutIssue = config.parts.filter(part => !issues.some(issue => (issue.labels || []).some((label) => label.name === `part:${part.name}`)));
         for (const part of partsWithoutIssue) {
             core.info(`Initalize part ${part.name}`);
             //create a new issue for the part
@@ -180,7 +180,7 @@ function handleSchedule() {
             // Get the state from the issue body
             const state = getStateFromBody(issue.body);
             // Get the part for the issue
-            const part = config.parts.find(p => issue.labels.some((label) => label.name === p.name));
+            const part = config.parts.find(p => (issue.labels || []).some((label) => label.name === `part:${p.name}`));
             if (!part) {
                 throw new Error(`Could not find part for issue ${issue.number}`);
             }
