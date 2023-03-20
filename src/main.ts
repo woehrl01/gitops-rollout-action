@@ -10,11 +10,11 @@ import { simpleGit, SimpleGit } from 'simple-git'
 import { minimatch } from 'minimatch'
 import dedent from 'dedent-js'
 import { parse } from 'yaml'
+import { spawnSync } from 'child_process'
 
 interface InputConfig {
   title: string
   token: string
-  duplicateHandling: string
   commitMessage: string,
   config: Config
 }
@@ -49,7 +49,6 @@ function getInputConfig(): InputConfig {
   return {
     title: core.getInput('title', { required: true }),
     token: core.getInput('token', { required: true }),
-    duplicateHandling: core.getInput('duplicate-handling', { required: true }),
     commitMessage: core.getInput('commit-message', { required: true }),
     config: parse(configFileContent) as Config
   }
@@ -75,23 +74,28 @@ async function findIssueWithLabel(
 const git: SimpleGit = simpleGit()
 
 interface Config {
-  parts: Part[]
+  rollouts: Rollout[]
 }
 
-interface Part {
+interface Rollout {
   name: string
   filePattern: string
   target: string
+  duplicateHandling: string
   waitDurations: string[]
+  validateScript?: string
+  validateScriptRetries?: number
 }
 
 interface State {
   waitDurations: string[]
-  last_rollout_timestamp: number
+  lastRolloutTimestamp: number
   current_ring: number
   sourceSha: string
   abort?: boolean
   abortReason?: string
+  validateScriptRetries?: number
+  lastValidateScriptResult?: string
 }
 
 async function handlePush(inputConfig: InputConfig): Promise<void> {
@@ -105,7 +109,7 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
   core.info(`Changed files: ${changedFiles.join(', ')}`)
 
   //get all parts that have changed files
-  const changedParts = inputConfig.config.parts.filter(part =>
+  const changedParts = inputConfig.config.rollouts.filter(part =>
     changedFiles.some((file: string) => minimatch(file, part.filePattern))
   )
 
@@ -133,11 +137,13 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
   )
 
 
-  const isAbortHandling = inputConfig.duplicateHandling === 'abort'
 
-  let hasChanged = false
+
+  const changedIssues: number[] = []
   for (const partWithIssue of partsWithIssue) {
     const part = partWithIssue.part
+
+    const isAbortHandling = part.duplicateHandling === 'abort'
 
     if (partWithIssue.issue && isAbortHandling) {
       core.info(`Found existing issue ${partWithIssue.issue.number} for part ${part.name}. Recreating it.`)
@@ -155,7 +161,6 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
     core.info(`Initialize part ${part.name}`)
 
     const files = await copyInitialFiles(part, currentCommit)
-    hasChanged = true
 
     const readableBodyText = dedent(`
     This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
@@ -183,7 +188,7 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
     `)
 
     const initalState: State = {
-      last_rollout_timestamp: Date.now(),
+      lastRolloutTimestamp: Date.now(),
       waitDurations: part.waitDurations,
       current_ring: 0,
       sourceSha: currentCommit
@@ -201,6 +206,8 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
       labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`, 'rollout']
     })
 
+    changedIssues.push(issue.data.number)
+
     core.info(`Created issue ${issue.data.number} for part ${part.name}`)
 
     if (partWithIssue.issue && isAbortHandling) {
@@ -214,12 +221,12 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
     }
   }
 
-  if (hasChanged) {
-    await commitAndPush(inputConfig)
+  if (changedIssues.length > 0) {
+    await commitAndPush(inputConfig, changedIssues)
   }
 }
 
-async function copyInitialFiles(part: Part, commitSha: string): Promise<string[]> {
+async function copyInitialFiles(part: Rollout, commitSha: string): Promise<string[]> {
   const target = path.join(part.target, '0')
 
   const files = await getFiles(part.filePattern)
@@ -259,7 +266,7 @@ async function getFiles(pattern: string): Promise<string[]> {
   })
 }
 
-async function commitAndPush(inputConfig: InputConfig): Promise<void> {
+async function commitAndPush(inputConfig: InputConfig, changedIssues: number[]): Promise<void> {
   const status = await git.status()
   if (status.files.length === 0) {
     core.info('No changes to commit')
@@ -273,7 +280,7 @@ async function commitAndPush(inputConfig: InputConfig): Promise<void> {
 
   const commitMessage = inputConfig.commitMessage
 
-  await git.commit(commitMessage)
+  await git.commit(commitMessage.replace('{issues}', changedIssues.map(issue => `#${issue}`).join(', ')))
 
   for (const retry of [1, 2, 3]) {
     try {
@@ -305,13 +312,13 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
   allOpenRolloutIssues.sort((a, b) => a.number - b.number)
 
   // Iterate over all issues
-  let hasChanged = false
+  const changedIssues: number[] = []
   for (const issue of allOpenRolloutIssues) {
 
     const labels = (issue.labels || []) as { name: string }[]
 
     // Get the part name from the issue
-    const part = getPartFromLabels(inputConfig.config.parts, labels)
+    const part = getPartFromLabels(inputConfig.config.rollouts, labels)
 
     // Get the state from the issue body
     const state = getStateFromBody(issue.body || '')
@@ -321,9 +328,21 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
     // Get the next state
     const newState = await getNextState(state, part, flags)
 
+    let lastValidateScriptResult = newState.lastValidateScriptResult
+    newState.lastValidateScriptResult = undefined // remove this from the state
+
+    if (lastValidateScriptResult) {
+      lastValidateScriptResult = dedent(`
+        ---
+        ${lastValidateScriptResult}
+      `)
+    } else {
+      lastValidateScriptResult = ''
+    }
+
     // Only update the issue if the state has changed
     if (JSON.stringify(newState) !== JSON.stringify(state)) {
-      hasChanged = true
+      changedIssues.push(issue.number)
       await updateStateInBody(
         octokit,
         github.context.repo.owner,
@@ -338,7 +357,10 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
           issue_number: issue.number,
-          body: `Rollout aborted: ${newState.abortReason}`
+          body: dedent(`
+            Rollout aborted: ${newState.abortReason}
+            ${lastValidateScriptResult}
+          `)
         })
 
       } else {
@@ -347,7 +369,10 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
           issue_number: issue.number,
-          body: `Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}`
+          body: dedent(`
+            Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}
+            ${lastValidateScriptResult}
+          `)
         })
       }
     }
@@ -365,8 +390,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
     }
   }
 
-  if (hasChanged) {
-    await commitAndPush(inputConfig)
+  if (changedIssues.length > 0) {
+    await commitAndPush(inputConfig, changedIssues)
   }
 }
 
@@ -381,7 +406,7 @@ interface ShouldCloseResponse {
   reason: string
 }
 
-function getPartFromLabels(parts: Part[], labels: { name: string }[]): Part {
+function getPartFromLabels(parts: Rollout[], labels: { name: string }[]): Rollout {
   const partLabel = labels.find(label => label.name.startsWith('part:'))
   if (!partLabel) {
     throw new Error('No part label found')
@@ -423,7 +448,7 @@ function getFlagsFromLabels(labels: { name: string }[]): FlagsFromLabels {
 
 async function getNextState(
   currentState: State,
-  part: Part,
+  part: Rollout,
   flags: FlagsFromLabels
 ): Promise<State> {
   if (currentState.current_ring < currentState.waitDurations.length) {
@@ -449,7 +474,7 @@ async function getNextState(
     const waitDuration = currentState.waitDurations[currentState.current_ring]
     const waitDurationInMs = parseGolangDuration(waitDuration)
     const timeSinceLastRollout =
-      Date.now() - currentState.last_rollout_timestamp
+      Date.now() - currentState.lastRolloutTimestamp
 
     if (timeSinceLastRollout < waitDurationInMs) {
       core.info(
@@ -460,13 +485,42 @@ async function getNextState(
 
     core.info(`Wait duration of ${waitDuration} has passed. increase ring...`)
 
+    if (part.validateScript && part.validateScript.length > 0) {
+      // run validation script as bash and check if it returns 0
+      const result = spawnSync('bash', ['-c', part.validateScript])
+
+      if (result.status !== 0) {
+        if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
+          core.info(`Validation script failed. Retry...`)
+          return {
+            ...currentState,
+            validateScriptRetries: (currentState.validateScriptRetries || 0) + 1,
+            lastValidateScriptResult: result.output.toString()
+          }
+        }
+
+        core.warning(`Validation script failed. Abort...`)
+        return {
+          ...currentState,
+          abort: true,
+          abortReason: `Validation script failed.`
+        }
+      }
+
+      core.info(`Validation script succeeded.`)
+      return {
+        ...increaseRing(currentState, part),
+        lastValidateScriptResult: result.output.toString()
+      }
+    }
+
     return increaseRing(currentState, part)
   }
 
   return currentState
 }
 
-async function increaseRing(currentState: State, part: Part): Promise<State> {
+async function increaseRing(currentState: State, part: Rollout): Promise<State> {
   const currentRingLocation = `${part.target}/${currentState.current_ring}`
   const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`
 
@@ -489,7 +543,7 @@ async function increaseRing(currentState: State, part: Part): Promise<State> {
 
   return {
     ...currentState,
-    last_rollout_timestamp: Date.now(),
+    lastRolloutTimestamp: Date.now(),
     current_ring: currentState.current_ring + 1
   }
 }

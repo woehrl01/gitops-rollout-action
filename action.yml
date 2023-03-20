@@ -14,10 +14,6 @@ inputs:
     required: false
     description: 'input description here'
     default: 'chore: rollout'
-  duplicate-handling: # change this
-    required: false
-    description: 'input description here'
-    default: 'queue'
   title: # change this
     required: false
     description: 'input description here'

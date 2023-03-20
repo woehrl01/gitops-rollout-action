@@ -1,7 +1,8 @@
-parts:
+rollouts:
   - name: part1
     filePattern: part1/**
     target: generated/part1
+    duplicateHandling: 'queue'
     waitDurations:
       - '5m'
       - '10m'

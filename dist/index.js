@@ -54,6 +54,7 @@ const simple_git_1 = __nccwpck_require__(9103);
 const minimatch_1 = __nccwpck_require__(2002);
 const dedent_js_1 = __importDefault(__nccwpck_require__(3159));
 const yaml_1 = __nccwpck_require__(4083);
+const child_process_1 = __nccwpck_require__(2081);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -83,7 +84,6 @@ function getInputConfig() {
     return {
         title: core.getInput('title', { required: true }),
         token: core.getInput('token', { required: true }),
-        duplicateHandling: core.getInput('duplicate-handling', { required: true }),
         commitMessage: core.getInput('commit-message', { required: true }),
         config: (0, yaml_1.parse)(configFileContent)
     };
@@ -109,7 +109,7 @@ function handlePush(inputConfig) {
         const changedFiles = (yield git.diff(['--name-only', parentCommit, currentCommit])).split('\n');
         core.info(`Changed files: ${changedFiles.join(', ')}`);
         //get all parts that have changed files
-        const changedParts = inputConfig.config.parts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
+        const changedParts = inputConfig.config.rollouts.filter(part => changedFiles.some((file) => (0, minimatch_1.minimatch)(file, part.filePattern)));
         core.info(`Changed parts: ${changedParts.map(part => part.name)}`);
         if (changedParts.length === 0) {
             core.info('No changed parts found. Nothing to do.');
@@ -122,10 +122,10 @@ function handlePush(inputConfig) {
                 issue: yield findIssueWithLabel(octokit, github.context.repo.owner, github.context.repo.repo, `part:${part.name}`)
             };
         })));
-        const isAbortHandling = inputConfig.duplicateHandling === 'abort';
-        let hasChanged = false;
+        const changedIssues = [];
         for (const partWithIssue of partsWithIssue) {
             const part = partWithIssue.part;
+            const isAbortHandling = part.duplicateHandling === 'abort';
             if (partWithIssue.issue && isAbortHandling) {
                 core.info(`Found existing issue ${partWithIssue.issue.number} for part ${part.name}. Recreating it.`);
                 //close the issue
@@ -139,7 +139,6 @@ function handlePush(inputConfig) {
             }
             core.info(`Initialize part ${part.name}`);
             const files = yield copyInitialFiles(part, currentCommit);
-            hasChanged = true;
             const readableBodyText = (0, dedent_js_1.default)(`
     This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
 
@@ -165,7 +164,7 @@ function handlePush(inputConfig) {
     
     `);
             const initalState = {
-                last_rollout_timestamp: Date.now(),
+                lastRolloutTimestamp: Date.now(),
                 waitDurations: part.waitDurations,
                 current_ring: 0,
                 sourceSha: currentCommit
@@ -179,6 +178,7 @@ function handlePush(inputConfig) {
                 body: `${readableBodyText} <!-- STATE: ${JSON.stringify(initalState)} -->`,
                 labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`, 'rollout']
             });
+            changedIssues.push(issue.data.number);
             core.info(`Created issue ${issue.data.number} for part ${part.name}`);
             if (partWithIssue.issue && isAbortHandling) {
                 //add a comment to the issue
@@ -190,8 +190,8 @@ function handlePush(inputConfig) {
                 });
             }
         }
-        if (hasChanged) {
-            yield commitAndPush(inputConfig);
+        if (changedIssues.length > 0) {
+            yield commitAndPush(inputConfig, changedIssues);
         }
     });
 }
@@ -228,7 +228,7 @@ function getFiles(pattern) {
         });
     });
 }
-function commitAndPush(inputConfig) {
+function commitAndPush(inputConfig, changedIssues) {
     return __awaiter(this, void 0, void 0, function* () {
         const status = yield git.status();
         if (status.files.length === 0) {
@@ -239,7 +239,7 @@ function commitAndPush(inputConfig) {
         yield git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
         yield git.add('.');
         const commitMessage = inputConfig.commitMessage;
-        yield git.commit(commitMessage);
+        yield git.commit(commitMessage.replace('{issues}', changedIssues.map(issue => `#${issue}`).join(', ')));
         for (const retry of [1, 2, 3]) {
             try {
                 yield git.push();
@@ -268,26 +268,40 @@ function handleTick(inputConfig) {
         //sort ascending by issue number
         allOpenRolloutIssues.sort((a, b) => a.number - b.number);
         // Iterate over all issues
-        let hasChanged = false;
+        const changedIssues = [];
         for (const issue of allOpenRolloutIssues) {
             const labels = (issue.labels || []);
             // Get the part name from the issue
-            const part = getPartFromLabels(inputConfig.config.parts, labels);
+            const part = getPartFromLabels(inputConfig.config.rollouts, labels);
             // Get the state from the issue body
             const state = getStateFromBody(issue.body || '');
             const flags = getFlagsFromLabels(labels);
             // Get the next state
             const newState = yield getNextState(state, part, flags);
+            let lastValidateScriptResult = newState.lastValidateScriptResult;
+            newState.lastValidateScriptResult = undefined; // remove this from the state
+            if (lastValidateScriptResult) {
+                lastValidateScriptResult = (0, dedent_js_1.default)(`
+        ---
+        ${lastValidateScriptResult}
+      `);
+            }
+            else {
+                lastValidateScriptResult = '';
+            }
             // Only update the issue if the state has changed
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
-                hasChanged = true;
+                changedIssues.push(issue.number);
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
                 if (newState.abort) {
                     yield octokit.rest.issues.createComment({
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
-                        body: `Rollout aborted: ${newState.abortReason}`
+                        body: (0, dedent_js_1.default)(`
+            Rollout aborted: ${newState.abortReason}
+            ${lastValidateScriptResult}
+          `)
                     });
                 }
                 else {
@@ -296,7 +310,10 @@ function handleTick(inputConfig) {
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
-                        body: `Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}`
+                        body: (0, dedent_js_1.default)(`
+            Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}
+            ${lastValidateScriptResult}
+          `)
                     });
                 }
             }
@@ -312,8 +329,8 @@ function handleTick(inputConfig) {
                 });
             }
         }
-        if (hasChanged) {
-            yield commitAndPush(inputConfig);
+        if (changedIssues.length > 0) {
+            yield commitAndPush(inputConfig, changedIssues);
         }
     });
 }
@@ -366,12 +383,26 @@ function getNextState(currentState, part, flags) {
             }
             const waitDuration = currentState.waitDurations[currentState.current_ring];
             const waitDurationInMs = parseGolangDuration(waitDuration);
-            const timeSinceLastRollout = Date.now() - currentState.last_rollout_timestamp;
+            const timeSinceLastRollout = Date.now() - currentState.lastRolloutTimestamp;
             if (timeSinceLastRollout < waitDurationInMs) {
                 core.info(`Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`);
                 return currentState;
             }
             core.info(`Wait duration of ${waitDuration} has passed. increase ring...`);
+            if (part.validateScript && part.validateScript.length > 0) {
+                // run validation script as bash and check if it returns 0
+                const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript]);
+                if (result.status !== 0) {
+                    if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
+                        core.info(`Validation script failed. Retry...`);
+                        return Object.assign(Object.assign({}, currentState), { validateScriptRetries: (currentState.validateScriptRetries || 0) + 1, lastValidateScriptResult: result.output.toString() });
+                    }
+                    core.warning(`Validation script failed. Abort...`);
+                    return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: `Validation script failed.` });
+                }
+                core.info(`Validation script succeeded.`);
+                return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: result.output.toString() });
+            }
             return increaseRing(currentState, part);
         }
         return currentState;
@@ -390,7 +421,7 @@ function increaseRing(currentState, part) {
         }
         // Copy files from current ring to next ring
         yield copyFolder(currentRingLocation, nextRingLocation);
-        return Object.assign(Object.assign({}, currentState), { last_rollout_timestamp: Date.now(), current_ring: currentState.current_ring + 1 });
+        return Object.assign(Object.assign({}, currentState), { lastRolloutTimestamp: Date.now(), current_ring: currentState.current_ring + 1 });
     });
 }
 function copyFolder(src, dest) {
