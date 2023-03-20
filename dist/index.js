@@ -284,10 +284,10 @@ function handleTick(inputConfig) {
             newState.lastValidateScriptResult = undefined; // remove this from the state
             if (lastValidateScriptResult) {
                 lastValidateScriptResult = (0, dedent_js_1.default)(`
-        ---
         \`\`\`bash
         ${lastValidateScriptResult}
         \`\`\`
+        ---
       `);
             }
             else {
@@ -307,8 +307,8 @@ function handleTick(inputConfig) {
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
                         body: (0, dedent_js_1.default)(`
-            Rollout aborted: ${newState.abortReason}
             ${lastValidateScriptResult}
+            Rollout aborted: ${newState.abortReason}
           `)
                     });
                 }
@@ -320,8 +320,8 @@ function handleTick(inputConfig) {
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
                         body: (0, dedent_js_1.default)(`
-            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
             ${lastValidateScriptResult}
+            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
           `)
                     });
                 }

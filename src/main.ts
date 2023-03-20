@@ -335,10 +335,10 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
 
     if (lastValidateScriptResult) {
       lastValidateScriptResult = dedent(`
-        ---
         \`\`\`bash
         ${lastValidateScriptResult}
         \`\`\`
+        ---
       `)
     } else {
       lastValidateScriptResult = ''
@@ -370,8 +370,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           repo: github.context.repo.repo,
           issue_number: issue.number,
           body: dedent(`
-            Rollout aborted: ${newState.abortReason}
             ${lastValidateScriptResult}
+            Rollout aborted: ${newState.abortReason}
           `)
         })
 
@@ -384,8 +384,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           repo: github.context.repo.repo,
           issue_number: issue.number,
           body: dedent(`
-            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
             ${lastValidateScriptResult}
+            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
           `)
         })
       }
