@@ -166,7 +166,7 @@ function handlePush(inputConfig) {
             const initalState = {
                 lastRolloutTimestamp: Date.now(),
                 waitDurations: part.waitDurations,
-                current_ring: 0,
+                currentRing: 0,
                 sourceSha: currentCommit
             };
             const title = inputConfig.title;
@@ -258,6 +258,7 @@ function commitAndPush(inputConfig, changedIssues) {
     });
 }
 function handleTick(inputConfig) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const octokit = github.getOctokit(inputConfig.token);
         const { data: allOpenRolloutIssues } = yield octokit.rest.issues.listForRepo({
@@ -297,7 +298,8 @@ function handleTick(inputConfig) {
                 changedIssues.push(issue.number);
                 core.info(`Updating issue ${issue.number} for part ${part.name}`);
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
-                if (newState.abort) {
+                core.info(`Updated issue successfully`);
+                if ((_a = newState.abort) !== null && _a !== void 0 ? _a : false) {
                     core.info(`Rollout aborted for issue ${issue.number} for part ${part.name}`);
                     yield octokit.rest.issues.createComment({
                         owner: github.context.repo.owner,
@@ -317,7 +319,7 @@ function handleTick(inputConfig) {
                         repo: github.context.repo.repo,
                         issue_number: issue.number,
                         body: (0, dedent_js_1.default)(`
-            Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}
+            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
             ${lastValidateScriptResult}
           `)
                     });
@@ -358,7 +360,7 @@ function isShouldCloseIssue(state, flags) {
     if (flags.isAborted) {
         return { yes: true, reason: 'not_planned' };
     }
-    if (state.current_ring >= state.waitDurations.length) {
+    if (state.currentRing >= state.waitDurations.length) {
         return { yes: true, reason: 'completed' };
     }
     if ((_a = state.abort) !== null && _a !== void 0 ? _a : false) {
@@ -376,7 +378,7 @@ function getFlagsFromLabels(labels) {
 }
 function getNextState(currentState, part, flags) {
     return __awaiter(this, void 0, void 0, function* () {
-        if (currentState.current_ring < currentState.waitDurations.length) {
+        if (currentState.currentRing < currentState.waitDurations.length) {
             if (flags.isAborted) {
                 core.info('Rollout is aborted. Skipping...');
                 return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: 'Aborted by user' });
@@ -389,7 +391,7 @@ function getNextState(currentState, part, flags) {
                 core.info('Fastlane is enabled. increase ring...');
             }
             else {
-                const waitDuration = currentState.waitDurations[currentState.current_ring];
+                const waitDuration = currentState.waitDurations[currentState.currentRing];
                 const waitDurationInMs = parseGolangDuration(waitDuration);
                 const timeSinceLastRollout = Date.now() - currentState.lastRolloutTimestamp;
                 if (timeSinceLastRollout < waitDurationInMs) {
@@ -427,8 +429,8 @@ function getNextState(currentState, part, flags) {
 }
 function increaseRing(currentState, part) {
     return __awaiter(this, void 0, void 0, function* () {
-        const currentRingLocation = `${part.target}/${currentState.current_ring}`;
-        const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`;
+        const currentRingLocation = `${part.target}/${currentState.currentRing}`;
+        const nextRingLocation = `${part.target}/${currentState.currentRing + 1}`;
         core.info(`Copy files from ${currentRingLocation} to ${nextRingLocation}`);
         // read currents ring commit
         const commitSha = fs.readFileSync(`${currentRingLocation}/.commit`, 'utf8');
@@ -438,7 +440,7 @@ function increaseRing(currentState, part) {
         }
         // Copy files from current ring to next ring
         yield copyFolder(currentRingLocation, nextRingLocation);
-        return Object.assign(Object.assign({}, currentState), { lastRolloutTimestamp: Date.now(), current_ring: currentState.current_ring + 1 });
+        return Object.assign(Object.assign({}, currentState), { lastRolloutTimestamp: Date.now(), currentRing: currentState.currentRing + 1 });
     });
 }
 function copyFolder(src, dest) {
@@ -500,7 +502,7 @@ function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentL
             issue_number: issueNumber,
             body: newBody,
             labels: [
-                `ring:${newState.current_ring}/${newState.waitDurations.length}`,
+                `ring:${newState.currentRing}/${newState.waitDurations.length}`,
                 ...keepLabels
             ]
         });

@@ -90,7 +90,7 @@ interface Rollout {
 interface State {
   waitDurations: string[]
   lastRolloutTimestamp: number
-  current_ring: number
+  currentRing: number
   sourceSha: string
   abort?: boolean
   abortReason?: string
@@ -190,7 +190,7 @@ async function handlePush(inputConfig: InputConfig): Promise<void> {
     const initalState: State = {
       lastRolloutTimestamp: Date.now(),
       waitDurations: part.waitDurations,
-      current_ring: 0,
+      currentRing: 0,
       sourceSha: currentCommit
     }
 
@@ -359,7 +359,9 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
         labels
       )
 
-      if (newState.abort) {
+      core.info(`Updated issue successfully`)
+
+      if (newState.abort ?? false) {
         core.info(`Rollout aborted for issue ${issue.number} for part ${part.name}`)
 
         await octokit.rest.issues.createComment({
@@ -381,7 +383,7 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           repo: github.context.repo.repo,
           issue_number: issue.number,
           body: dedent(`
-            Rollout advanced to ring ${newState.current_ring}/${newState.waitDurations.length}
+            Rollout advanced to ring ${newState.currentRing}/${newState.waitDurations.length}
             ${lastValidateScriptResult}
           `)
         })
@@ -441,7 +443,7 @@ function isShouldCloseIssue(state: State, flags: FlagsFromLabels): ShouldCloseRe
     return { yes: true, reason: 'not_planned' }
   }
 
-  if (state.current_ring >= state.waitDurations.length) {
+  if (state.currentRing >= state.waitDurations.length) {
     return { yes: true, reason: 'completed' }
   }
 
@@ -466,7 +468,7 @@ async function getNextState(
   part: Rollout,
   flags: FlagsFromLabels
 ): Promise<State> {
-  if (currentState.current_ring < currentState.waitDurations.length) {
+  if (currentState.currentRing < currentState.waitDurations.length) {
     if (flags.isAborted) {
       core.info('Rollout is aborted. Skipping...')
       return {
@@ -484,7 +486,7 @@ async function getNextState(
     if (flags.isFastlane) {
       core.info('Fastlane is enabled. increase ring...')
     } else {
-      const waitDuration = currentState.waitDurations[currentState.current_ring]
+      const waitDuration = currentState.waitDurations[currentState.currentRing]
       const waitDurationInMs = parseGolangDuration(waitDuration)
       const timeSinceLastRollout =
         Date.now() - currentState.lastRolloutTimestamp
@@ -542,8 +544,8 @@ async function getNextState(
 }
 
 async function increaseRing(currentState: State, part: Rollout): Promise<State> {
-  const currentRingLocation = `${part.target}/${currentState.current_ring}`
-  const nextRingLocation = `${part.target}/${currentState.current_ring + 1}`
+  const currentRingLocation = `${part.target}/${currentState.currentRing}`
+  const nextRingLocation = `${part.target}/${currentState.currentRing + 1}`
 
   core.info(`Copy files from ${currentRingLocation} to ${nextRingLocation}`)
 
@@ -565,7 +567,7 @@ async function increaseRing(currentState: State, part: Rollout): Promise<State> 
   return {
     ...currentState,
     lastRolloutTimestamp: Date.now(),
-    current_ring: currentState.current_ring + 1
+    currentRing: currentState.currentRing + 1
   }
 }
 
@@ -647,7 +649,7 @@ async function updateStateInBody(
     issue_number: issueNumber,
     body: newBody,
     labels: [
-      `ring:${newState.current_ring}/${newState.waitDurations.length}`,
+      `ring:${newState.currentRing}/${newState.waitDurations.length}`,
       ...keepLabels
     ]
   })
