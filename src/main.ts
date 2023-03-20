@@ -399,6 +399,7 @@ interface FlagsFromLabels {
   isFastlane: boolean
   isPaused: boolean
   isAborted: boolean
+  isIgnoreValidation: boolean
 }
 
 interface ShouldCloseResponse {
@@ -442,7 +443,8 @@ function getFlagsFromLabels(labels: { name: string }[]): FlagsFromLabels {
   return {
     isFastlane: labels.some(label => label.name === 'fastlane'),
     isPaused: labels.some(label => label.name === 'paused'),
-    isAborted: labels.some(label => label.name === 'abort')
+    isAborted: labels.some(label => label.name === 'abort'),
+    isIgnoreValidation: labels.some(label => label.name === 'ignore-validation')
   }
 }
 
@@ -468,24 +470,23 @@ async function getNextState(
 
     if (flags.isFastlane) {
       core.info('Fastlane is enabled. increase ring...')
-      return increaseRing(currentState, part)
+    } else {
+      const waitDuration = currentState.waitDurations[currentState.current_ring]
+      const waitDurationInMs = parseGolangDuration(waitDuration)
+      const timeSinceLastRollout =
+        Date.now() - currentState.lastRolloutTimestamp
+
+      if (timeSinceLastRollout < waitDurationInMs) {
+        core.info(
+          `Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`
+        )
+        return currentState
+      }
+
+      core.info(`Wait duration of ${waitDuration} has passed. increase ring...`)
     }
 
-    const waitDuration = currentState.waitDurations[currentState.current_ring]
-    const waitDurationInMs = parseGolangDuration(waitDuration)
-    const timeSinceLastRollout =
-      Date.now() - currentState.lastRolloutTimestamp
-
-    if (timeSinceLastRollout < waitDurationInMs) {
-      core.info(
-        `Not enough time has passed since last rollout. Wait for ${waitDuration} before rolling out to next ring.`
-      )
-      return currentState
-    }
-
-    core.info(`Wait duration of ${waitDuration} has passed. increase ring...`)
-
-    if (part.validateScript && part.validateScript.length > 0) {
+    if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
       // run validation script as bash and check if it returns 0
       const result = spawnSync('bash', ['-c', part.validateScript])
 
@@ -512,6 +513,8 @@ async function getNextState(
         ...increaseRing(currentState, part),
         lastValidateScriptResult: result.output.toString()
       }
+    } else if (flags.isIgnoreValidation) {
+      core.info(`Validation script ignored.`)
     } else {
       core.info(`No validation script found.`)
     }
