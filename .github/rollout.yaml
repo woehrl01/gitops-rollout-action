@@ -3,6 +3,9 @@ rollouts:
     filePattern: part1/**
     target: generated/part1
     duplicateHandling: 'queue'
+    validateScript: |
+      set -e
+      echo 'validate part1 ✅'
     waitDurations:
       - '5m'
       - '10m'
