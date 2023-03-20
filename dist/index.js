@@ -325,6 +325,9 @@ function handleTick(inputConfig) {
                     });
                 }
             }
+            else {
+                core.info(`No changes for issue ${issue.number} for part ${part.name}`);
+            }
             core.info(`Checking if issue ${issue.number} should be closed`);
             // Close the issue if the state is finished
             const shouldClose = isShouldCloseIssue(newState, flags);
@@ -370,7 +373,7 @@ function isShouldCloseIssue(state, flags) {
 }
 function getFlagsFromLabels(labels) {
     return {
-        isFastlane: labels.some(label => label.name === 'fastlane'),
+        isFasttrack: labels.some(label => label.name === 'fasttrack'),
         isPaused: labels.some(label => label.name === 'paused'),
         isAborted: labels.some(label => label.name === 'abort'),
         isIgnoreValidation: labels.some(label => label.name === 'ignore-validation')
@@ -387,7 +390,7 @@ function getNextState(currentState, part, flags) {
                 core.info('Rollout is paused. Skipping...');
                 return currentState;
             }
-            if (flags.isFastlane) {
+            if (flags.isFasttrack) {
                 core.info('Fastlane is enabled. increase ring...');
             }
             else {
@@ -401,6 +404,7 @@ function getNextState(currentState, part, flags) {
                 core.info(`Wait duration of ${waitDuration} has passed. increase ring...`);
             }
             if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
+                core.info(`Running validation script...`);
                 // run validation script as bash and check if it returns 0
                 const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript]);
                 const output = result.output.toString();
@@ -475,7 +479,23 @@ function copyFolder(src, dest) {
 // Helper function to extract state from issue body
 function getStateFromBody(body) {
     const match = body.match(/<!-- STATE: (.*?) -->/);
-    return match ? JSON.parse(match[1]) : null;
+    const state = match ? JSON.parse(match[1]) : null;
+    if (!state) {
+        throw new Error('Could not find state in issue body');
+    }
+    if (!state.currentRing) {
+        state.currentRing = 0;
+    }
+    if (!state.lastRolloutTimestamp) {
+        state.lastRolloutTimestamp = 0;
+    }
+    if (!state.validateScriptRetries) {
+        state.validateScriptRetries = 0;
+    }
+    if (!state.waitDurations) {
+        state.waitDurations = [];
+    }
+    return state;
 }
 // Helper function to update state in issue body
 function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentLabels) {

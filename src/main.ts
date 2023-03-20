@@ -388,6 +388,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
           `)
         })
       }
+    } else {
+      core.info(`No changes for issue ${issue.number} for part ${part.name}`)
     }
 
     core.info(`Checking if issue ${issue.number} should be closed`)
@@ -411,7 +413,7 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
 }
 
 interface FlagsFromLabels {
-  isFastlane: boolean
+  isFasttrack: boolean
   isPaused: boolean
   isAborted: boolean
   isIgnoreValidation: boolean
@@ -456,7 +458,7 @@ function isShouldCloseIssue(state: State, flags: FlagsFromLabels): ShouldCloseRe
 
 function getFlagsFromLabels(labels: { name: string }[]): FlagsFromLabels {
   return {
-    isFastlane: labels.some(label => label.name === 'fastlane'),
+    isFasttrack: labels.some(label => label.name === 'fasttrack'),
     isPaused: labels.some(label => label.name === 'paused'),
     isAborted: labels.some(label => label.name === 'abort'),
     isIgnoreValidation: labels.some(label => label.name === 'ignore-validation')
@@ -483,7 +485,7 @@ async function getNextState(
       return currentState
     }
 
-    if (flags.isFastlane) {
+    if (flags.isFasttrack) {
       core.info('Fastlane is enabled. increase ring...')
     } else {
       const waitDuration = currentState.waitDurations[currentState.currentRing]
@@ -502,6 +504,8 @@ async function getNextState(
     }
 
     if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
+      core.info(`Running validation script...`)
+
       // run validation script as bash and check if it returns 0
       const result = spawnSync('bash', ['-c', part.validateScript])
       const output = result.output.toString()
@@ -604,9 +608,31 @@ async function copyFolder(src: string, dest: string): Promise<void> {
 }
 
 // Helper function to extract state from issue body
-function getStateFromBody(body: string): any {
+function getStateFromBody(body: string): State {
   const match = body.match(/<!-- STATE: (.*?) -->/)
-  return match ? JSON.parse(match[1]) : null
+
+  const state = match ? JSON.parse(match[1]) : null
+  if (!state) {
+    throw new Error('Could not find state in issue body')
+  }
+
+  if (!state.currentRing) {
+    state.currentRing = 0
+  }
+
+  if (!state.lastRolloutTimestamp) {
+    state.lastRolloutTimestamp = 0
+  }
+
+  if (!state.validateScriptRetries) {
+    state.validateScriptRetries = 0
+  }
+
+  if (!state.waitDurations) {
+    state.waitDurations = []
+  }
+
+  return state
 }
 
 // Helper function to update state in issue body
