@@ -489,6 +489,7 @@ async function getNextState(
     if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
       // run validation script as bash and check if it returns 0
       const result = spawnSync('bash', ['-c', part.validateScript])
+      const output = result.output.toString()
 
       if (result.status !== 0) {
         if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
@@ -496,7 +497,7 @@ async function getNextState(
           return {
             ...currentState,
             validateScriptRetries: (currentState.validateScriptRetries || 0) + 1,
-            lastValidateScriptResult: result.output.toString()
+            lastValidateScriptResult: output
           }
         }
 
@@ -508,10 +509,11 @@ async function getNextState(
         }
       }
 
+
       core.info(`Validation script succeeded.`)
       return {
         ...increaseRing(currentState, part),
-        lastValidateScriptResult: result.output.toString()
+        lastValidateScriptResult: output
       }
     } else if (flags.isIgnoreValidation) {
       core.info(`Validation script ignored.`)

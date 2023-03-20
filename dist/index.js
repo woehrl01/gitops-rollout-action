@@ -394,16 +394,17 @@ function getNextState(currentState, part, flags) {
             if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
                 // run validation script as bash and check if it returns 0
                 const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript]);
+                const output = result.output.toString();
                 if (result.status !== 0) {
                     if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
                         core.info(`Validation script failed. Retry...`);
-                        return Object.assign(Object.assign({}, currentState), { validateScriptRetries: (currentState.validateScriptRetries || 0) + 1, lastValidateScriptResult: result.output.toString() });
+                        return Object.assign(Object.assign({}, currentState), { validateScriptRetries: (currentState.validateScriptRetries || 0) + 1, lastValidateScriptResult: output });
                     }
                     core.warning(`Validation script failed. Abort...`);
                     return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: `Validation script failed.` });
                 }
                 core.info(`Validation script succeeded.`);
-                return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: result.output.toString() });
+                return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: output });
             }
             else if (flags.isIgnoreValidation) {
                 core.info(`Validation script ignored.`);
