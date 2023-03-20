@@ -532,8 +532,11 @@ async function getNextState(
 
       core.info(`Validation script succeeded.`)
       core.info(`Output: ${output}`)
+
+      const newRingState = await increaseRing(currentState, part)
+
       return {
-        ...increaseRing(currentState, part),
+        ...newRingState,
         lastValidateScriptResult: output
       }
     } else if (flags.isIgnoreValidation) {

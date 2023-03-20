@@ -419,7 +419,8 @@ function getNextState(currentState, part, flags) {
                 }
                 core.info(`Validation script succeeded.`);
                 core.info(`Output: ${output}`);
-                return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: output });
+                const newRingState = yield increaseRing(currentState, part);
+                return Object.assign(Object.assign({}, newRingState), { lastValidateScriptResult: output });
             }
             else if (flags.isIgnoreValidation) {
                 core.info(`Validation script ignored.`);
