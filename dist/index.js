@@ -284,7 +284,9 @@ function handleTick(inputConfig) {
             if (lastValidateScriptResult) {
                 lastValidateScriptResult = (0, dedent_js_1.default)(`
         ---
+        \`\`\`bash
         ${lastValidateScriptResult}
+        \`\`\`
       `);
             }
             else {

@@ -336,7 +336,9 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
     if (lastValidateScriptResult) {
       lastValidateScriptResult = dedent(`
         ---
+        \`\`\`bash
         ${lastValidateScriptResult}
+        \`\`\`
       `)
     } else {
       lastValidateScriptResult = ''
