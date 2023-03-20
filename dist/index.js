@@ -296,6 +296,7 @@ function handleTick(inputConfig) {
                 core.info(`Updating issue ${issue.number} for part ${part.name}`);
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
                 if (newState.abort) {
+                    core.info(`Rollout aborted for issue ${issue.number} for part ${part.name}`);
                     yield octokit.rest.issues.createComment({
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,
@@ -307,6 +308,7 @@ function handleTick(inputConfig) {
                     });
                 }
                 else {
+                    core.info(`Rollout advanced to next ring for part ${part.name}`);
                     // comment on the issue
                     yield octokit.rest.issues.createComment({
                         owner: github.context.repo.owner,

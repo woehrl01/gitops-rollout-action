@@ -358,6 +358,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
       )
 
       if (newState.abort) {
+        core.info(`Rollout aborted for issue ${issue.number} for part ${part.name}`)
+
         await octokit.rest.issues.createComment({
           owner: github.context.repo.owner,
           repo: github.context.repo.repo,
@@ -369,6 +371,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
         })
 
       } else {
+        core.info(`Rollout advanced to next ring for part ${part.name}`)
+
         // comment on the issue
         await octokit.rest.issues.createComment({
           owner: github.context.repo.owner,
