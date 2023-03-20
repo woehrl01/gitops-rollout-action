@@ -62,7 +62,7 @@ function run() {
             const eventType = context.eventName;
             core.info(`Event type: ${eventType}`);
             const inputConfig = getInputConfig();
-            if (eventType === 'schedule' || eventType === 'workflow_dispatch') {
+            if (eventType === 'schedule' || eventType === 'workflow_dispatch' || eventType === 'repository_dispatch') {
                 yield handleTick(inputConfig);
             }
             else if (eventType === 'push') {
@@ -403,6 +403,9 @@ function getNextState(currentState, part, flags) {
                 core.info(`Validation script succeeded.`);
                 return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: result.output.toString() });
             }
+            else {
+                core.info(`No validation script found.`);
+            }
             return increaseRing(currentState, part);
         }
         return currentState;
@@ -433,7 +436,7 @@ function copyFolder(src, dest) {
         }
         // clear destination folder
         if (fs.existsSync(dest)) {
-            fs.rmdirSync(dest, { recursive: true });
+            fs.rmSync(dest, { recursive: true });
         }
         fs.mkdirSync(dest, { recursive: true });
         // Read the source directory

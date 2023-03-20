@@ -28,7 +28,7 @@ async function run(): Promise<void> {
 
     const inputConfig = getInputConfig()
 
-    if (eventType === 'schedule' || eventType === 'workflow_dispatch') {
+    if (eventType === 'schedule' || eventType === 'workflow_dispatch' || eventType === 'repository_dispatch') {
       await handleTick(inputConfig)
     } else if (eventType === 'push') {
       await handlePush(inputConfig)
@@ -512,6 +512,8 @@ async function getNextState(
         ...increaseRing(currentState, part),
         lastValidateScriptResult: result.output.toString()
       }
+    } else {
+      core.info(`No validation script found.`)
     }
 
     return increaseRing(currentState, part)
@@ -557,7 +559,7 @@ async function copyFolder(src: string, dest: string): Promise<void> {
 
   // clear destination folder
   if (fs.existsSync(dest)) {
-    fs.rmdirSync(dest, { recursive: true })
+    fs.rmSync(dest, { recursive: true })
   }
 
   fs.mkdirSync(dest, { recursive: true })
