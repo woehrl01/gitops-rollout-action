@@ -5,7 +5,7 @@ rollouts:
     duplicateHandling: 'queue'
     validateScript: |
       set -e
-      echo "part1 ✅"
+      echo "part1 on ring $ROLLOUT_CURRENT_RING ✅"
     waitDurations:
       - '5m'
       - '10m'

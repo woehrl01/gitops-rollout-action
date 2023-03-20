@@ -508,7 +508,14 @@ async function getNextState(
       core.info(`Running validation script...`)
 
       // run validation script as bash and check if it returns 0
-      const result = spawnSync('bash', ['-c', part.validateScript], { encoding: 'utf-8' })
+      const result = spawnSync('bash', ['-c', part.validateScript], {
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          ROLLOUT_CURRENT_RING: currentState.currentRing.toString(),
+          ROLLOUT_NEXT_RING: (currentState.currentRing + 1).toString(),
+        }
+      })
       const output = result.stdout.toString()
 
       if (result.status !== 0) {

@@ -407,7 +407,10 @@ function getNextState(currentState, part, flags) {
             if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
                 core.info(`Running validation script...`);
                 // run validation script as bash and check if it returns 0
-                const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript], { encoding: 'utf-8' });
+                const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript], {
+                    encoding: 'utf-8',
+                    env: Object.assign(Object.assign({}, process.env), { ROLLOUT_CURRENT_RING: currentState.currentRing.toString(), ROLLOUT_NEXT_RING: (currentState.currentRing + 1).toString() })
+                });
                 const output = result.stdout.toString();
                 if (result.status !== 0) {
                     if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
