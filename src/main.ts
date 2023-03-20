@@ -349,6 +349,7 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
       changedIssues.push(issue.number)
 
       core.info(`Updating issue ${issue.number} for part ${part.name}`)
+      core.info(`New state: ${JSON.stringify(newState)}`)
 
       await updateStateInBody(
         octokit,

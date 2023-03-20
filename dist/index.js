@@ -297,6 +297,7 @@ function handleTick(inputConfig) {
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
                 changedIssues.push(issue.number);
                 core.info(`Updating issue ${issue.number} for part ${part.name}`);
+                core.info(`New state: ${JSON.stringify(newState)}`);
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
                 core.info(`Updated issue successfully`);
                 if ((_a = newState.abort) !== null && _a !== void 0 ? _a : false) {
