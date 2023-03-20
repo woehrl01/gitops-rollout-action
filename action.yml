@@ -13,7 +13,7 @@ inputs:
   commit-message: # change this
     required: false
     description: 'input description here'
-    default: 'chore: rollout'
+    default: 'chore: rollout {issues}'
   title: # change this
     required: false
     description: 'input description here'
