@@ -407,8 +407,8 @@ function getNextState(currentState, part, flags) {
             if (part.validateScript && part.validateScript.length > 0 && !flags.isIgnoreValidation) {
                 core.info(`Running validation script...`);
                 // run validation script as bash and check if it returns 0
-                const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript]);
-                const output = result.output.toString();
+                const result = (0, child_process_1.spawnSync)('bash', ['-c', part.validateScript], { encoding: 'utf-8' });
+                const output = result.stdout.toString();
                 if (result.status !== 0) {
                     if ((currentState.validateScriptRetries) || 0 >= (part.validateScriptRetries || 0)) {
                         core.info(`Validation script failed. Retry...`);
