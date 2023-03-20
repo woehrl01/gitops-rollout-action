@@ -230,6 +230,7 @@ function getFiles(pattern) {
 }
 function commitAndPush(inputConfig, changedIssues) {
     return __awaiter(this, void 0, void 0, function* () {
+        core.info(`Committing and pushing changes`);
         const status = yield git.status();
         if (status.files.length === 0) {
             core.info('No changes to commit');
@@ -292,6 +293,7 @@ function handleTick(inputConfig) {
             // Only update the issue if the state has changed
             if (JSON.stringify(newState) !== JSON.stringify(state)) {
                 changedIssues.push(issue.number);
+                core.info(`Updating issue ${issue.number} for part ${part.name}`);
                 yield updateStateInBody(octokit, github.context.repo.owner, github.context.repo.repo, issue.number, newState, labels);
                 if (newState.abort) {
                     yield octokit.rest.issues.createComment({
@@ -317,6 +319,7 @@ function handleTick(inputConfig) {
                     });
                 }
             }
+            core.info(`Checking if issue ${issue.number} should be closed`);
             // Close the issue if the state is finished
             const shouldClose = isShouldCloseIssue(newState, flags);
             if (shouldClose.yes) {
@@ -404,6 +407,7 @@ function getNextState(currentState, part, flags) {
                     return Object.assign(Object.assign({}, currentState), { abort: true, abortReason: `Validation script failed.` });
                 }
                 core.info(`Validation script succeeded.`);
+                core.info(`Output: ${output}`);
                 return Object.assign(Object.assign({}, increaseRing(currentState, part)), { lastValidateScriptResult: output });
             }
             else if (flags.isIgnoreValidation) {

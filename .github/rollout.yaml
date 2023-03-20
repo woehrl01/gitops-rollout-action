@@ -5,7 +5,11 @@ rollouts:
     duplicateHandling: 'queue'
     validateScript: |
       set -e
-      echo 'validate part1 ✅'
+      cat <<EOF
+      ```bash
+      part1 ✅
+      ```
+      EOF
     waitDurations:
       - '5m'
       - '10m'

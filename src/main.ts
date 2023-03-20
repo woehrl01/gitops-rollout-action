@@ -267,6 +267,8 @@ async function getFiles(pattern: string): Promise<string[]> {
 }
 
 async function commitAndPush(inputConfig: InputConfig, changedIssues: number[]): Promise<void> {
+  core.info(`Committing and pushing changes`)
+
   const status = await git.status()
   if (status.files.length === 0) {
     core.info('No changes to commit')
@@ -343,6 +345,9 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
     // Only update the issue if the state has changed
     if (JSON.stringify(newState) !== JSON.stringify(state)) {
       changedIssues.push(issue.number)
+
+      core.info(`Updating issue ${issue.number} for part ${part.name}`)
+
       await updateStateInBody(
         octokit,
         github.context.repo.owner,
@@ -376,6 +381,8 @@ async function handleTick(inputConfig: InputConfig): Promise<void> {
         })
       }
     }
+
+    core.info(`Checking if issue ${issue.number} should be closed`)
 
     // Close the issue if the state is finished
     const shouldClose = isShouldCloseIssue(newState, flags)
@@ -511,6 +518,7 @@ async function getNextState(
 
 
       core.info(`Validation script succeeded.`)
+      core.info(`Output: ${output}`)
       return {
         ...increaseRing(currentState, part),
         lastValidateScriptResult: output
