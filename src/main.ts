@@ -233,7 +233,6 @@ function convertToMermaidDiagram(currentState: State): string {
   const { waitDurations, currentRing } = currentState
 
   const currentIsFailed = currentState.abort ?? false
-
   const ringCount = waitDurations.length
 
   const mermaidDiagram = dedent(`
@@ -243,7 +242,7 @@ function convertToMermaidDiagram(currentState: State): string {
       classDef failed fill:#FF3D00,stroke:#333,color:#000
       classDef current fill:#64B5F6,stroke:#333,color:#000
 
-      ${Array.from(Array(ringCount).keys())
+      ${Array.from(Array(ringCount + 1).keys())
       .map(ring => {
         const ringName = `Ring ${ring}`
         let ringClass = ''
@@ -732,7 +731,7 @@ async function updateStateInBody(
       dedent(`<!-- MERMAID_STATE_START -->
 
       ${convertToMermaidDiagram(newState)}
-      
+
       <!-- MERMAID_STATE_END -->`)
     )
   }

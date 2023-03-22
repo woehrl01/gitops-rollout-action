@@ -210,7 +210,7 @@ function convertToMermaidDiagram(currentState) {
       classDef failed fill:#FF3D00,stroke:#333,color:#000
       classDef current fill:#64B5F6,stroke:#333,color:#000
 
-      ${Array.from(Array(ringCount).keys())
+      ${Array.from(Array(ringCount + 1).keys())
         .map(ring => {
         const ringName = `Ring ${ring}`;
         let ringClass = '';
@@ -571,7 +571,7 @@ function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentL
             newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`).replace(/<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s, (0, dedent_js_1.default)(`<!-- MERMAID_STATE_START -->
 
       ${convertToMermaidDiagram(newState)}
-      
+
       <!-- MERMAID_STATE_END -->`));
         }
         const keepLabels = currentLabels.filter(label => !label.name.startsWith('ring:'));
