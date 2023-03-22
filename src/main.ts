@@ -730,7 +730,9 @@ async function updateStateInBody(
     ).replace(
       /<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s,
       dedent(`<!-- MERMAID_STATE_START -->
+
       ${convertToMermaidDiagram(newState)}
+      
       <!-- MERMAID_STATE_END -->`)
     )
   }

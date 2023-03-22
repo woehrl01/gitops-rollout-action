@@ -224,7 +224,7 @@ function convertToMermaidDiagram(currentState) {
     })
         .join('\n')}
 
-      ${Array.from(Array(ringCount - 1).keys())
+      ${Array.from(Array(ringCount).keys())
         .map(ring => {
         let arrow = '-->';
         if (ring === currentRing) {
@@ -568,7 +568,11 @@ function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentL
             newBody = `<!-- STATE: ${JSON.stringify(newState)} -->`;
         }
         else {
-            newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`).replace(/<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s, `<!-- MERMAID_STATE_START -->${convertToMermaidDiagram(newState)}<!-- MERMAID_STATE_END -->`);
+            newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`).replace(/<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s, (0, dedent_js_1.default)(`<!-- MERMAID_STATE_START -->
+
+      ${convertToMermaidDiagram(newState)}
+      
+      <!-- MERMAID_STATE_END -->`));
         }
         const keepLabels = currentLabels.filter(label => !label.name.startsWith('ring:'));
         yield octokit.rest.issues.update({
