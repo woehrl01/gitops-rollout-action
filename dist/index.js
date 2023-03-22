@@ -139,12 +139,20 @@ function handlePush(inputConfig) {
             }
             core.info(`Initialize part ${part.name}`);
             const files = yield copyInitialFiles(part, currentCommit);
+            const initialState = {
+                lastRolloutTimestamp: Date.now(),
+                waitDurations: part.waitDurations,
+                currentRing: 0,
+                sourceSha: currentCommit
+            };
             const readableBodyText = (0, dedent_js_1.default)(`
     This issue is dedicated to tracking the automated rollout of \`${part.name}\`.
 
     The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 
-    ${part.waitDurations.map((duration, index) => `- Ring ${index + 1}: ${duration}`).join('\n')}
+    <!-- MERMAID_STATE_START -->
+    ${JSON.stringify(convertToMermaidDiagram(initialState))}
+    <!-- MERMAID_STATE_END -->
 
     The rollout is considered complete when all rings are active. Progress is monitored using issue labels, which include:
 
@@ -161,21 +169,16 @@ function handlePush(inputConfig) {
     ---
 
     Initiation commit: ${currentCommit}
-    
+
+    <!-- STATE: ${JSON.stringify(initialState)} -->
     `);
-            const initalState = {
-                lastRolloutTimestamp: Date.now(),
-                waitDurations: part.waitDurations,
-                currentRing: 0,
-                sourceSha: currentCommit
-            };
             const title = inputConfig.title;
             const issueTitle = title.replace('{name}', part.name);
             const issue = yield octokit.rest.issues.create({
                 owner: github.context.repo.owner,
                 repo: github.context.repo.repo,
                 title: issueTitle,
-                body: `${readableBodyText} <!-- STATE: ${JSON.stringify(initalState)} -->`,
+                body: `${readableBodyText} `,
                 labels: [`part:${part.name}`, `ring:0/${part.waitDurations.length}`, 'rollout']
             });
             changedIssues.push(issue.data.number);
@@ -194,6 +197,53 @@ function handlePush(inputConfig) {
             yield commitAndPush(inputConfig, changedIssues);
         }
     });
+}
+function convertToMermaidDiagram(currentState) {
+    var _a;
+    const { waitDurations, currentRing } = currentState;
+    const currentIsFailed = (_a = currentState.abort) !== null && _a !== void 0 ? _a : false;
+    const ringCount = waitDurations.length;
+    const mermaidDiagram = (0, dedent_js_1.default)(`
+      \`\`\`mermaid
+      graph LR
+      classDef success fill:#4CAF50,stroke:#333,color:#000
+      classDef failed fill:#FF3D00,stroke:#333,color:#000
+      classDef current fill:#64B5F6,stroke:#333,color:#000
+
+      ${Array.from(Array(ringCount).keys())
+        .map(ring => {
+        const ringName = `Ring ${ring}`;
+        let ringClass = '';
+        if (ring === currentRing) {
+            ringClass = currentIsFailed ? ':::failed' : ':::current';
+        }
+        else if (ring < currentRing) {
+            ringClass = ':::success';
+        }
+        return `${ring}(( ${ringName} ))${ringClass}`;
+    })
+        .join('\n')}
+
+      ${Array.from(Array(ringCount - 1).keys())
+        .map(ring => {
+        let arrow = '-->';
+        if (ring === currentRing) {
+            if (currentIsFailed) {
+                arrow = '--x';
+            }
+            else {
+                arrow = '--o';
+            }
+        }
+        else if (ring < currentRing) {
+            arrow = '==>';
+        }
+        return `${ring}${arrow} |${waitDurations[ring]}| ${ring + 1}`;
+    })
+        .join('\n')}
+      \`\`\`
+      `);
+    return mermaidDiagram;
 }
 function copyInitialFiles(part, commitSha) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -518,7 +568,7 @@ function updateStateInBody(octokit, owner, repo, issueNumber, newState, currentL
             newBody = `<!-- STATE: ${JSON.stringify(newState)} -->`;
         }
         else {
-            newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`);
+            newBody = issue.body.replace(/<!-- STATE: (.*?) -->/, `<!-- STATE: ${JSON.stringify(newState)} -->`).replace(/<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s, `<!-- MERMAID_STATE_START -->${convertToMermaidDiagram(newState)}<!-- MERMAID_STATE_END -->`);
         }
         const keepLabels = currentLabels.filter(label => !label.name.startsWith('ring:'));
         yield octokit.rest.issues.update({
