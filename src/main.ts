@@ -257,7 +257,7 @@ function convertToMermaidDiagram(currentState: State): string {
       })
       .join('\n')}
 
-      ${Array.from(Array(ringCount - 1).keys())
+      ${Array.from(Array(ringCount).keys())
       .map(ring => {
 
         let arrow = '-->'
@@ -729,7 +729,9 @@ async function updateStateInBody(
       `<!-- STATE: ${JSON.stringify(newState)} -->`
     ).replace(
       /<!-- MERMAID_STATE_START -->.*<!-- MERMAID_STATE_END -->/s,
-      `<!-- MERMAID_STATE_START -->${convertToMermaidDiagram(newState)}<!-- MERMAID_STATE_END -->`
+      dedent(`<!-- MERMAID_STATE_START -->
+      ${convertToMermaidDiagram(newState)}
+      <!-- MERMAID_STATE_END -->`)
     )
   }
 
