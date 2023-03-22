@@ -151,7 +151,7 @@ function handlePush(inputConfig) {
     The rollout is divided into ${part.waitDurations.length} rings, executed within the following timeframes:
 
     <!-- MERMAID_STATE_START -->
-    ${JSON.stringify(convertToMermaidDiagram(initialState))}
+    ${convertToMermaidDiagram(initialState)}
     <!-- MERMAID_STATE_END -->
 
     The rollout is considered complete when all rings are active. Progress is monitored using issue labels, which include:
