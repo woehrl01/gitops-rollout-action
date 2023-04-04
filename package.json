@@ -29,7 +29,7 @@
     "@actions/github": "^5.1.1",
     "dedent-js": "^1.0.1",
     "i": "^0.3.7",
-    "minimatch": "^7.4.2",
+    "minimatch": "^8.0.3",
     "npm": "^9.6.2",
     "simple-git": "^3.17.0",
     "yaml": "^2.2.1"
